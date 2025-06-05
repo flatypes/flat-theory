@@ -1,0 +1,14 @@
+_build/
+.merlin
+\#*\#
+.\#*
+*~
+*.bak
+*.DS_Store
+.coq-native/
+*.timing
+.lia.cache
+.nia.cache
+.vscode/
+result
+doc/

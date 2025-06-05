@@ -1,0 +1,9 @@
+(coq.theory
+  (name flat)
+  (package flat)
+  (synopsis "Meta-theories on regular languages")
+  (theories stdpp)
+  (coqdoc_flags --utf8 --toc --toc-depth 2 --html --interpolate
+    --index indexpage --no-lib-name --parse-comments
+    --with-header %{env:ROOT=.}/coqdocjs/header.html
+    --with-footer %{env:ROOT=.}/coqdocjs/footer.html))

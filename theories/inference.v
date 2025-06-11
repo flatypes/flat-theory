@@ -45,6 +45,18 @@ Proof.
       all: apply elem_of_concat_lit; auto.
 Qed.
 
+Definition infer_substr (r : regex) (i j : nat) : regex :=
+  if bool_decide (i < j) then infer_take (j - i) (infer_drop i r) else re_null.
+
+Lemma rule_infer_substr s r i j :
+  s ∈ r →
+  substr s i j ∈ infer_substr r i j.
+Proof.
+  intros. unfold substr, infer_substr. case_bool_decide.
+  - by apply rule_infer_take, rule_infer_drop.
+  - constructor.
+Qed. 
+
 Definition infer_char_at_const (i : nat) (r : regex) : charset :=
   first_set (infer_drop i r).
 

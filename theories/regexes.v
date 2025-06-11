@@ -10,6 +10,9 @@ Definition str : Type := list char.
 
 Definition ε : str := [].
 
+Definition substr (s: str) (i : nat) (j : nat) : str :=
+  if bool_decide (i < j) then take (j - i) (drop i s) else ε.
+
 Fixpoint index_of (s : str) (c : char) : option nat :=
   match s with
   | [] => None

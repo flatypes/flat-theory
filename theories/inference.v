@@ -55,7 +55,7 @@ Proof.
   intros. unfold substr, infer_substr. case_bool_decide.
   - by apply rule_infer_take, rule_infer_drop.
   - constructor.
-Qed. 
+Qed.
 
 Definition infer_char_at_const (i : nat) (r : regex) : charset :=
   first_set (infer_drop i r).

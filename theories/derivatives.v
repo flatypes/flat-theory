@@ -93,7 +93,7 @@ Lemma elem_of_dd_all c s r :
   c :: s ∈ r →
   ∃ C r', c ∈ C ∧ s ∈ r' ∧ (C, r') ∈ dd_all r.
 Proof.
-  revert s. induction r as [| |?|? IHr1 ? IHr2|? IHr1 ? IHr2|r IHr] => s.
+  revert s. induction r as [| |?|r1 IHr1 r2 IHr2|r1 IHr1 r2 IHr2|r IHr] => s.
   all: inversion 1 as [|?|?????? Heq|?|?|?|?????? Heq]; subst.
   - eexists. exists re_null. repeat split; [done|constructor|].
     simpl. case_bool_decide as Heq.
@@ -104,7 +104,7 @@ Proof.
       exists C, r'. repeat split; [done..|].
       simpl. apply elem_of_app. right. by rewrite bool_decide_true.
     * edestruct IHr1 as [C [r' [? [??]]]]; eauto.
-      exists C, (r' ++ᵣ r2). repeat split; [done | by constructor|].
+      exists C, (r' ++ᵣ r2). repeat split; [done|by constructor|].
       simpl. apply elem_of_app. left. apply elem_of_list_fmap. naive_solver.
   - edestruct IHr1 as [C [r' [? [??]]]]; eauto.
     exists C, r'. repeat split; [done..|].
@@ -114,6 +114,6 @@ Proof.
     simpl. apply elem_of_app. by right.
   - apply app_eq_cons in Heq as [[-> ->]|[? [-> ->]]]; [naive_solver|].
     edestruct IHr as [C [r' [? [??]]]]; eauto.
-    exists C, (r' ++ᵣ re_star r). repeat split; [done | by constructor|].
+    exists C, (r' ++ᵣ re_star r). repeat split; [done|by constructor|].
     simpl. apply elem_of_list_fmap. naive_solver.
 Qed.

@@ -4,6 +4,20 @@ Definition char : Type := nat.
 
 Definition charset : Type := listset char.
 
+Definition charset_delete (C : charset) (c : char) : charset :=
+  let l := listset_car C in
+  {| listset_car := filter (λ x, x ≠ c) l |}.
+
+Notation "C #- c" := (charset_delete C c) (at level 60).
+
+Lemma elem_of_charset_delete c C c' :
+  c ∈ C →
+  c ≠ c' →
+  c ∈ C #- c'.
+Proof.
+  intros. by apply elem_of_list_filter.
+Qed.
+
 (** * Strings *)
 
 Definition str : Type := list char.

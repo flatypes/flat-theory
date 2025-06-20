@@ -72,7 +72,7 @@ Proof.
 Admitted.
 
 Definition infer_char_at (r : regex) (k : nat) : charset :=
-  union_many ((λ '(r1, C, r2), C) <$> (cut_at_index r k)).
+  big_union ((λ '(r1, C, r2), C) <$> (cut_at_index r k)).
 
 Lemma rule_infer_char_at s r k c :
   s ∈ r →
@@ -81,11 +81,11 @@ Lemma rule_infer_char_at s r k c :
 Proof.
   intros. unfold infer_char_at.
   destruct (cut_at_index_spec s r k c) as [r1 [C' [r2 [? [? [??]]]]]]; [done..|].
-  eapply elem_of_union_many; [by apply elem_of_list_fmap; exists (r1, C', r2) | done].
+  eapply elem_of_big_union; [by apply elem_of_list_fmap; exists (r1, C', r2) | done].
 Qed.
 
 Definition refine_char_at (r : regex) (k : nat) (Cₜ : charset) : regex :=
-  union_many ((λ '(r1, C, r2), r1 ++ᵣ re_lit (C ∩ Cₜ) ++ᵣ r2) <$> (cut_at_index r k)).
+  big_union ((λ '(r1, C, r2), r1 ++ᵣ re_lit (C ∩ Cₜ) ++ᵣ r2) <$> (cut_at_index r k)).
 
 Lemma str_cut_middle (s : str) k c :
   s !! k = Some c →
@@ -102,13 +102,13 @@ Lemma rule_refine_char_at s r k c Cₜ :
 Proof.
   intros.
   destruct (cut_at_index_spec s r k c) as [r1 [C' [r2 [? [? [??]]]]]]; [done..|].
-  eapply elem_of_union_many; first by apply elem_of_list_fmap; exists (r1, C', r2).
+  eapply elem_of_big_union; first by apply elem_of_list_fmap; exists (r1, C', r2).
   rewrite <-(str_cut_middle s k c); [|done].
   constructor; [done|]. constructor; [|done]. by constructor.
 Qed.
 
 Definition infer_take (r : regex) (k : nat) : regex :=
-  union_many ((λ '(r1, _, _), r1) <$> (cut_at_index r k)).
+  big_union ((λ '(r1, _, _), r1) <$> (cut_at_index r k)).
 
 Lemma rule_infer_take s r k :
   s ∈ r →
@@ -117,11 +117,11 @@ Lemma rule_infer_take s r k :
 Proof.
   intros ? Hk. apply lookup_lt_is_Some in Hk as [c ?].
   destruct (cut_at_index_spec s r k c) as [r1 [C' [r2 [? [? [??]]]]]]; [done..|].
-  eapply elem_of_union_many; [by apply elem_of_list_fmap; exists (r1, C', r2) | done].
+  eapply elem_of_big_union; [by apply elem_of_list_fmap; exists (r1, C', r2) | done].
 Qed.
 
 Definition infer_drop (r : regex) (k : nat) : regex :=
-  union_many ((λ '(_, C, r2), re_lit C ++ᵣ r2) <$> (cut_at_index r k)).
+  big_union ((λ '(_, C, r2), re_lit C ++ᵣ r2) <$> (cut_at_index r k)).
 
 Lemma rule_infer_drop s r k :
   s ∈ r →
@@ -130,6 +130,6 @@ Lemma rule_infer_drop s r k :
 Proof.
   intros ? Hk. apply lookup_lt_is_Some in Hk as [c ?].
   destruct (cut_at_index_spec s r k c) as [r1 [C' [r2 [? [? [??]]]]]]; [done..|].
-  eapply elem_of_union_many; first by apply elem_of_list_fmap; exists (r1, C', r2).
+  eapply elem_of_big_union; first by apply elem_of_list_fmap; exists (r1, C', r2).
   erewrite drop_S; [|done]. rewrite cons_app. constructor; [|done]. by constructor.
 Qed. *)

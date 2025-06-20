@@ -17,16 +17,16 @@ Lemma tail_app {A: Type} (l1 l2 : list A) :
   tail (l1 ++ l2) = if bool_decide (l1 = []) then tail l2 else tail l1 ++ l2.
 Proof. by destruct l1. Qed.
 
-Fixpoint union_many {C : Type} `{Empty C, Union C} (Xs : list C) : C :=
+Fixpoint big_union {C : Type} `{Empty C, Union C} (Xs : list C) : C :=
   match Xs with
   | [] => ∅
-  | X :: Xs => X ∪ union_many Xs
+  | X :: Xs => X ∪ big_union Xs
   end.
 
-Lemma elem_of_union_many {A C} `{SemiSet A C} (X : C) (Xs : list C) (x : A) :
+Lemma elem_of_big_union {A C} `{SemiSet A C} (X : C) (Xs : list C) (x : A) :
   X ∈ Xs →
   x ∈ X →
-  x ∈ union_many Xs.
+  x ∈ big_union Xs.
 Proof.
   induction Xs.
   - inversion 1.

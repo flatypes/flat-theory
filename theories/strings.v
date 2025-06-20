@@ -1,5 +1,7 @@
 From stdpp Require Import listset.
 
+(** * Unicode Characters *)
+
 Definition char : Type := nat.
 
 Definition charset : Type := listset char.
@@ -24,21 +26,49 @@ Definition str : Type := list char.
 
 Definition ε : str := [].
 
-Local Open Scope Z_scope.
+Definition str_take (i : Z) (s : str) : str := take (Z.to_nat i) s.
 
-(** Char at: the singleton string containing a character at the given position;
-    or empty string when position is out of range. *)
-Definition str_at (s : str) (i : Z) : str :=
-  if bool_decide (0 ≤ i) then
-    match s !! (Z.to_nat i) with
-    | Some c => [c]
-    | None => ε
-    end
-  else ε.
+Definition str_drop (i : Z) (s : str) : str :=
+  if bool_decide (0 ≤ i)%Z then drop (Z.to_nat i) s else [].
+
+Definition str_substr (i j : Z) (s : str) : str := str_take (j - i) (str_drop i s).
 
 Coercion Z.of_nat : nat >-> Z.
 
-Lemma str_at_in_range s i :
+Lemma str_substr_alt i j s :
+  str_substr i j s = str_drop i (str_take j s).
+Proof.
+  intros. unfold str_substr, str_take, str_drop. case_bool_decide; [|by rewrite take_nil].
+  rewrite take_drop_commute. destruct (Z.le_gt_cases i j) as [?|?].
+  - by replace (Z.to_nat i + Z.to_nat (j - i)) with (Z.to_nat j) by lia.
+  - replace (Z.to_nat (j - i)) with 0 by lia. rewrite Nat.add_0_r.
+    rewrite skipn_firstn_comm, Nat.sub_diag, take_0.
+    symmetry. apply nil_length_inv. rewrite length_drop, length_take. lia.
+Qed.
+
+Lemma str_substr_nil i j s :
+  (i < 0 ∨ j ≤ i)%Z → str_substr i j s = [].
+Proof.
+  intro. unfold str_substr, str_drop, str_take. case_bool_decide.
+  - assert (Z.to_nat (j - i) = 0) as -> by lia. apply take_0.
+  - apply take_nil.
+Qed.
+
+Fact str_substr_nil_cond_alt i j :
+  ¬ (0 ≤ i < j)%Z ↔ (i < 0 ∨ j ≤ i)%Z.
+Proof. lia. Qed.
+
+(** Char at: the singleton string containing a character at the given position;
+    or empty string when position is out of range. *)
+Definition str_at (i : Z) (s : str) : str :=
+  if bool_decide (0 ≤ i)%Z then
+    match s !! (Z.to_nat i) with
+    | Some c => [c] 
+    | None => [] 
+    end
+  else [].
+
+(* Lemma str_at_in_range s i :
   0 ≤ i < length s →
   ∃ c, s !! (Z.to_nat i) = Some c ∧ str_at s i = [c].
 Proof.
@@ -59,61 +89,63 @@ Proof.
   assert (length s ≤ Z.to_nat i)%nat as Hi by lia.
   apply lookup_ge_None in Hi. by setoid_rewrite Hi.
 Qed.
+*)
 
-Definition str_substr_begin (s : str) (i : Z) : str :=
-  if bool_decide (0 ≤ i < length s) then drop (Z.to_nat i) s else ε.
-
-Definition str_substr_until (s : str) (j : Z) : str :=
-  take (Z.to_nat j) s.
-
-(* Substring: evaluates to the longest substring of `s` of length at most `j - i` starting at `i`.
-   It evaluates to the empty string if `j - i` is negative or `i` is out of range. *)
-Definition str_substr (s : str) (i j : Z) : str :=
-  str_substr_until (str_substr_begin s i) (j - i).
-
-Fixpoint str_find (s : str) (c : char) : option nat :=
-  match s with
-  | [] => None
-  | c' :: s' => if bool_decide (c' = c) then Some O else S <$> (str_find s' c)
-  end.
-
-Lemma str_find_None s c :
-  str_find s c = None → c ∉ s.
-Proof.
-  induction s as [|c' s']; simpl.
-  - intros. apply not_elem_of_nil.
-  - case_bool_decide; [inversion 1|].
-    rewrite fmap_None. intros. apply not_elem_of_cons. auto.
-Qed.
-
-Lemma str_find_Some s c i :
-  str_find s c = Some i →
-  s !! i = Some c ∧ c ∉ (take i s).
-Proof.
-  revert i. induction s as [|c' s'] => i; simpl; [inversion 1|].
-  case_bool_decide.
-  - inversion 1. subst. simpl. split; [done | apply not_elem_of_nil].
-  - rewrite fmap_Some. intros [j [? ->]].
-    setoid_rewrite lookup_cons. rewrite firstn_cons, not_elem_of_cons. naive_solver.
-Qed.
-
-(** Index of the first occurrence of `c` in `s`. Otherwise, it is -1. *)
-Definition str_index_of (s : str) (c : char) : Z :=
-  match str_find s c with
-  | Some n => Z.of_nat n
+Definition str_index_of (c : char) (s : str) : Z :=
+  match list_find (λ x, x = c) s with
+  | Some (i, _) => i
   | None => -1
   end.
 
-Lemma str_index_of_ge_0 s c :
-  let i := str_index_of s c in
-  0 ≤ i → str_find s c = Some (Z.to_nat i).
+Lemma str_index_of_nonneg c s (i : nat) :
+  str_index_of c s = i ↔ s !! i = Some c ∧ c ∉ take i s.
 Proof.
-  unfold str_index_of. destruct (str_find s c); [|lia].
-  intros. f_equal. lia.
+  trans (list_find (λ x, x = c) s = Some (i, c)).
+  + unfold str_index_of. case_match eqn:Heq.
+    - case_match. apply list_find_Some in Heq. naive_solver.
+    - split; [lia|done].
+  + rewrite list_find_Some. apply and_iff_compat_l.
+    rewrite elem_of_take. naive_solver.
 Qed.
 
-Lemma str_index_of_lt_0 s c :
-  str_index_of s c < 0 → str_find s c = None.
+Lemma str_index_of_neg c s :
+  str_index_of c s = (-1)%Z ↔ c ∉ s.
 Proof.
-  unfold str_index_of. destruct (str_find s c); [lia|done].
+  trans (list_find (λ x, x = c) s = None).
+  + unfold str_index_of. case_match; [|done].
+    case_match. split; [lia|congruence].
+  + rewrite list_find_None, Forall_forall. naive_solver.
 Qed.
+
+Lemma str_index_of_take c s n :
+  (str_index_of c s < n)%Z →
+  str_index_of c (str_take n s) = str_index_of c s.
+Admitted.
+
+Lemma str_index_of_drop c s n :
+  (0 ≤ str_index_of c s)%Z →
+  str_index_of c (str_drop n s) = (str_index_of c s - n)%Z.
+Admitted.
+
+(* Lemma str_find_take s c i n :
+  str_find s c = Some i →
+  i < n →
+  str_find (take n s) c = Some i.
+Proof.
+  rewrite !str_find_Some. intros [? Hp] ?. split.
+  + by setoid_rewrite lookup_take.
+  + by rewrite take_take, min_l by lia.
+Qed.
+
+Lemma str_find_drop s c i n :
+  str_find s c = Some i →
+  n ≤ i →
+  str_find (drop n s) c = Some (i - n).
+Proof.
+  rewrite !str_find_Some. intros [? Hp] ?. split.
+  + setoid_rewrite lookup_drop.
+    by rewrite Nat.add_sub_assoc, Nat.add_sub' by done.
+  + rewrite <-skipn_firstn_comm.
+    rewrite <-(take_drop n (take i s)) in Hp. by apply not_elem_of_app in Hp as [_ ?].
+Qed.
+*)

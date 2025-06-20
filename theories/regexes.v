@@ -1,4 +1,4 @@
-From stdpp Require Import list.
+From stdpp Require Import list well_founded.
 From flat Require Export strings.
 
 (** * Regular expressions and languages. *)
@@ -40,6 +40,32 @@ Inductive elem_of_regex : ElemOf str regex :=
   .
 Global Existing Instance elem_of_regex.
 
+Fixpoint re_power (r : regex) (n : nat) : regex :=
+  match n with
+  | O => re_null
+  | S n' => r ++ᵣ re_power r n'
+  end.
+
+Notation "r ^ n" := (re_power r n).
+
+Fixpoint nullable (r : regex) : bool :=
+  match r with
+  | re_none => false
+  | re_null => true
+  | re_lit _ => false
+  | re_concat r1 r2 => nullable r1 && nullable r2
+  | re_union r1 r2 => nullable r1 || nullable r2
+  | re_star _ => true
+  end.
+
+Fixpoint re_rev (r : regex) : regex :=
+  match r with
+  | re_concat r1 r2 => re_rev r2 ++ᵣ re_rev r1
+  | re_union r1 r2 => re_rev r1 ∪ re_rev r2
+  | re_star r => re_star (re_rev r)
+  | _ => r
+  end.
+
 Section regex_lemmas.
 
   Implicit Type c : char.
@@ -57,6 +83,45 @@ Section regex_lemmas.
     c :: s ∈ re_lit C ++ᵣ r.
   Proof.
     rewrite str_app_cons. constructor; [by constructor | done].
+  Qed.
+
+  Lemma elem_of_re_power_app s1 s2 n1 n2 r :
+    s1 ∈ r ^ n1 →
+    s2 ∈ r ^ n2 →
+    s1 ++ s2 ∈ r ^ (n1 + n2).
+  Proof.
+    revert s1 s2. induction n1; simpl => s1 s2.
+    all: inversion 1; subst => ?.
+    - by rewrite app_nil_l.
+    - rewrite <-app_assoc. constructor; auto.
+  Qed.
+
+  Local Definition str_length_ind :=
+    well_founded_induction (well_founded_ltof str length).
+
+  Lemma elem_of_re_star_power s r :
+    s ∈ re_star r ↔ ∃ n, s ∈ r ^ n.
+  Proof.
+    split.
+    + induction s as [s IHs] using str_length_ind. unfold ltof in IHs.
+      inversion 1 as [|?|?|?|?|?|? s1 s2]; subst.
+      - exists O. constructor.
+      - destruct (nil_or_length_pos s1) as [?|?]; [done|].
+        edestruct (IHs s2) as [n ?]; [rewrite length_app; lia | done|].
+        exists (S n). simpl. by constructor.
+    + intros [n Hs].
+      generalize dependent s. induction n as [|n']; inversion 1; subst.
+      - constructor.
+      - destruct s1; [auto | constructor; eauto].
+  Qed.
+
+  Lemma elem_of_re_star_app s1 s2 r :
+    s1 ∈ re_star r →
+    s2 ∈ re_star r →
+    s1 ++ s2 ∈ re_star r.
+  Proof.
+    rewrite !elem_of_re_star_power. intros [n1 ?] [n2 ?].
+    exists (n1 + n2). by apply elem_of_re_power_app.
   Qed.
 
   Lemma regex_elem_of_singleton s1 s2 :
@@ -90,16 +155,6 @@ Section regex_lemmas.
     + intros. apply regex_elem_of_union.
   Qed.
 
-  Fixpoint nullable (r : regex) : bool :=
-    match r with
-    | re_none => false
-    | re_null => true
-    | re_lit _ => false
-    | re_concat r1 r2 => nullable r1 && nullable r2
-    | re_union r1 r2 => nullable r1 || nullable r2
-    | re_star _ => true
-    end.
-
   Lemma nullable_spec r :
     nullable r ↔ ε ∈ r.
   Proof.
@@ -122,6 +177,23 @@ Section regex_lemmas.
     destruct (nullable r) eqn:Heq.
     - apply Is_true_true in Heq. left. by apply nullable_spec.
     - apply Is_true_false in Heq. right => ?. by apply Heq, nullable_spec.
+  Qed.
+
+  Lemma elem_of_re_rev s r :
+    s ∈ r →
+    reverse s ∈ re_rev r.
+  Proof.
+    induction 1; simpl.
+    - setoid_rewrite reverse_nil. constructor.
+    - rewrite reverse_singleton. by constructor.
+    - rewrite reverse_app. by constructor.
+    - apply elem_of_union. by left.
+    - apply elem_of_union. by right.
+    - setoid_rewrite reverse_nil. constructor.
+    - rewrite reverse_app. simpl in *.
+      apply elem_of_re_star_app; [done|].
+      rewrite <-app_nil_r at 1. constructor; [|done|constructor].
+      setoid_rewrite <-reverse_nil. naive_solver.
   Qed.
 
 End regex_lemmas.

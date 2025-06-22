@@ -74,7 +74,7 @@ Section regex_lemmas.
   Implicit Type r : regex.
 
   Lemma str_app_cons c s :
-    c :: s = [c] ++ s.
+    [c] ++ s = c :: s.
   Proof. naive_solver. Qed.
 
   Lemma elem_of_concat_lit c C s r :
@@ -82,7 +82,7 @@ Section regex_lemmas.
     s ∈ r →
     c :: s ∈ re_lit C ++ᵣ r.
   Proof.
-    rewrite str_app_cons. constructor; [by constructor | done].
+    rewrite <-str_app_cons. constructor; [by constructor | done].
   Qed.
 
   Lemma elem_of_re_power_app s1 s2 n1 n2 r :
@@ -124,7 +124,7 @@ Section regex_lemmas.
     exists (n1 + n2). by apply elem_of_re_power_app.
   Qed.
 
-  Lemma regex_elem_of_singleton s1 s2 :
+  Lemma re_elem_of_singleton s1 s2 :
     s1 ∈ regex_from_str s2 ↔ s1 = s2.
   Proof.
     split.
@@ -135,7 +135,7 @@ Section regex_lemmas.
         apply elem_of_singleton in Hc' as ->. naive_solver.
     + intros ->. induction s2.
       - constructor.
-      - simpl. rewrite str_app_cons. constructor; [|done].
+      - simpl. rewrite <-str_app_cons. constructor; [|done].
         constructor. by apply elem_of_singleton.
   Qed.
 
@@ -151,7 +151,7 @@ Section regex_lemmas.
   Proof.
     split.
     + inversion 1.
-    + intros. apply regex_elem_of_singleton.
+    + intros. apply re_elem_of_singleton.
     + intros. apply regex_elem_of_union.
   Qed.
 
@@ -195,5 +195,11 @@ Section regex_lemmas.
       rewrite <-app_nil_r at 1. constructor; [|done|constructor].
       setoid_rewrite <-reverse_nil. naive_solver.
   Qed.
+
+  Global Instance re_empty_dec (r : regex) : Decision (r ≡ ∅).
+  Admitted.
+
+  Global Instance re_singleton_dec (r : regex) (c : char) : Decision (r ≡ {[ [c] ]}).
+  Admitted.
 
 End regex_lemmas.

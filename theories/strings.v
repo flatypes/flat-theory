@@ -6,6 +6,16 @@ Definition char : Type := nat.
 
 Definition charset : Type := listset char.
 
+Definition charset_is_singleton (C : charset) : option char :=
+  match listset_car C with
+  | [c] => Some c
+  | _ => None
+  end.
+
+Lemma charset_is_singleton_Some C c :
+  charset_is_singleton C = Some c → C ≡ {[ c ]}.
+Admitted.
+
 Definition charset_delete (C : charset) (c : char) : charset :=
   let l := listset_car C in
   {| listset_car := filter (λ x, x ≠ c) l |}.
@@ -25,6 +35,22 @@ Qed.
 Definition str : Type := list char.
 
 Definition ε : str := [].
+
+Definition infix : relation str := λ t s, ∃ s1 s2, s = s1 ++ t ++ s2.
+
+Infix "`infix_of`" := infix (at level 70).
+
+Lemma infix_app_l t s1 s2 :
+  t `infix_of` s1 → t `infix_of` s1 ++ s2.
+Proof.
+  intros [tl [tr ->]]. exists tl, (tr ++ s2). by simplify_list_eq.
+Qed.
+
+Lemma infix_app_r t s1 s2 :
+  t `infix_of` s2 → t `infix_of` s1 ++ s2.
+Proof.
+  intros [tl [tr ->]]. exists (s1 ++ tl), tr. by simplify_list_eq.
+Qed.
 
 Definition str_take (i : Z) (s : str) : str := take (Z.to_nat i) s.
 

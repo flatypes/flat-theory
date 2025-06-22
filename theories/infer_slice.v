@@ -267,7 +267,7 @@ Section infer_slice.
   
   Lemma index_sem_take i n s :
     index_pos i →
-    (⟦ i ⟧ s < n)%Z →
+    (0 ≤ ⟦ i ⟧ s < n)%Z →
     ⟦ i ⟧ (str_take n s) = ⟦ i ⟧ s.
   Proof.
     inversion 1; subst; simpl; intros.

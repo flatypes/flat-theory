@@ -5,12 +5,12 @@ Section infer_basic.
 
   Implicit Type (s : str).
 
-  Lemma infer_concat s1 r1 s2 r2 :
+  Corollary infer_concat s1 r1 s2 r2 :
     s1 ∈ r1 →
     s2 ∈ r2 →
     s1 ++ s2 ∈ r1 ++ᵣ r2.
   Proof.
-    intros. by constructor.
+    by constructor.
   Qed.
 
   Fixpoint re_length_min (r : regex) : nat :=
@@ -54,7 +54,10 @@ Section infer_basic.
     - rewrite length_app. replace 0 with (0 + 0) by lia. apply Nat.add_le_mono; auto.
   Qed.
 
-  (* Reverse *)
+  Corollary infer_reverse s r :
+    s ∈ r →
+    reverse s ∈ re_rev r.
+  Proof. apply elem_of_re_rev. Qed.
 
 End infer_basic.
 
@@ -136,7 +139,7 @@ Section infer_test.
     intros Hs Hr ?. rewrite <-(take_drop i l) in Hr.
     apply (re_cnf_app _ _ _ _ Hs) in Hr as [s1 [s2 [r1 [r2 [-> [? [Hs2 [? Hr2]]]]]]]].
     apply (collect_prefix_spec _ _ _ Hs2) in Hr2 as [? ->].
-    by apply infix_app_l, infix_app_r.
+    by apply infix_app_r, infix_app_l.
   Qed.
 
   Fixpoint derive (c : char) (r : regex) : regex :=
@@ -285,18 +288,6 @@ Section infer_test.
     unfold prefix in Hr'. eauto.
   Qed.
 
-  Fixpoint str_alphabet (s : str) : charset :=
-    match s with
-    | [] => ∅
-    | c :: s' => {[ c ]} ∪ str_alphabet s'
-    end.
-
-  Lemma elem_of_str_alphabet c s :
-    c ∈ str_alphabet s ↔ c ∈ s.
-  Proof.
-    induction s; set_solver.
-  Qed.
-
   Fixpoint re_alphabet (r : regex) : charset :=
     match r with
     | re_none => ∅
@@ -326,3 +317,319 @@ Section infer_test.
   Qed.
 
 End infer_test.
+
+Section infer_slice.
+
+  Implicit Type (s : str).
+
+  Fixpoint re_drop_1 (r : regex) : regex :=
+    match r with
+    | re_none => re_null
+    | re_null => re_null
+    | re_lit C => re_null
+    | re_concat r1 r2 => 
+      (re_drop_1 r1 ++ᵣ r2) ∪ (if bool_decide ([] ∈ r1) then re_drop_1 r2 else ∅)
+    | re_union r1 r2 => re_drop_1 r1 ∪ re_drop_1 r2
+    | re_star r => (re_drop_1 r ++ᵣ re_star r) ∪ re_null
+    end.
+
+  Lemma elem_of_re_drop_1 s r :
+    s ∈ r →
+    drop 1 s ∈ re_drop_1 r.
+  Proof.
+    induction 1; simpl.
+    - constructor.
+    - constructor.
+    - destruct s1.
+      * rewrite bool_decide_true by done. simpl. apply elem_of_union. by right.
+      * simplify_list_eq. rewrite drop_0. apply elem_of_union. left. by constructor.
+    - apply elem_of_union. by left.
+    - apply elem_of_union. by right.
+    - apply elem_of_union. right. constructor.
+    - rewrite drop_app. destruct s1; [done|]. rewrite length_cons, drop_0.
+      apply elem_of_union. left. by constructor.
+  Qed.
+
+  Fixpoint re_drop (k : nat) (r : regex) : regex :=
+    match k with
+    | 0 => r
+    | S k' => re_drop k' (re_drop_1 r)
+    end.
+
+  Lemma elem_of_re_drop s r k :
+    s ∈ r →
+    drop k s ∈ re_drop k r.
+  Proof.
+    revert s r. induction k as [|k IHk] => s r ?; simpl. { by rewrite drop_0. }
+    replace (S k) with (1 + k) by lia.
+    rewrite <-drop_drop. apply IHk. by apply elem_of_re_drop_1.
+  Qed.
+
+  Fixpoint re_take_1 (r : regex) : regex :=
+    match r with
+    | re_none => re_null
+    | re_null => re_null
+    | re_lit C => re_lit C
+    | re_concat r1 r2 => 
+      re_take_1 r1 ∪ (if bool_decide ([] ∈ r1) then re_take_1 r2 else ∅)
+    | re_union r1 r2 => re_take_1 r1 ∪ re_take_1 r2
+    | re_star r => re_take_1 r ∪ re_null
+    end.
+
+  Lemma elem_of_re_take_1 s r :
+    s ∈ r →
+    take 1 s ∈ re_take_1 r.
+  Proof.
+    induction 1; simpl.
+    - constructor.
+    - by constructor.
+    - destruct s1.
+      * rewrite bool_decide_true by done. simpl. apply elem_of_union. by right.
+      * rewrite take_app, length_cons, take_0, app_nil_r.
+        apply elem_of_union. by left.
+    - apply elem_of_union. by left.
+    - apply elem_of_union. by right.
+    - apply elem_of_union. right. constructor.
+    - rewrite take_app. destruct s1; [done|]. rewrite length_cons, take_0, app_nil_r.
+      apply elem_of_union. by left.
+  Qed.
+
+  Fixpoint re_take (k : nat) (r : regex) : regex :=
+    match k with
+    | 0 => re_null
+    | S k' => re_take_1 r ++ᵣ re_take k' (re_drop_1 r)
+    end.
+
+  Lemma elem_of_re_take s r k :
+    s ∈ r →
+    take k s ∈ re_take k r.
+  Proof.
+    revert s r. induction k as [|k IHk] => s r ?; simpl. { rewrite take_0. constructor. }
+    replace (S k) with (1 + k) by lia.
+    rewrite <-take_take_drop. constructor.
+    + by apply elem_of_re_take_1.
+    + apply IHk. by apply elem_of_re_drop_1.
+  Qed.
+
+  Inductive index : Type :=
+    | i_nat : nat → index
+    | i_rev : nat → index
+    | i_fst : char → index
+    .
+
+  Definition index_sem (s : str) (i : index) : Z :=
+    match i with
+    | i_nat k => k
+    | i_rev k => length s - k
+    | i_fst c => str_index_of c s
+    end.
+
+  Local Notation "⟦ i ⟧ s" := (index_sem s i) (at level 20).
+
+  Definition re_take_index (i : index) (r : regex) : regex :=
+    match i with
+    | i_nat k => re_take k r
+    | i_rev k => re_rev (re_drop k (re_rev r))
+    | i_fst c => re_take_until c r
+    end.
+
+  Set Printing Coercions.
+
+  Ltac simplify_arith :=
+    repeat match goal with
+    | _ => progress simplify_eq/=
+    | |- context [Z.to_nat (Z.of_nat _)] =>
+      rewrite Nat2Z.id
+    | |- context [Z.to_nat (Z.of_nat ?x - Z.of_nat ?y)] =>
+      try replace (Z.to_nat (Z.of_nat x - Z.of_nat y)) with (x - y) by lia
+    end.
+
+  Lemma infer_take_index s r i :
+    (0 ≤ ⟦ i ⟧ s)%Z →
+    s ∈ r →
+    str_take (⟦ i ⟧ s) s ∈ re_take_index i r.
+  Proof.
+    intros. destruct i; simpl in *.
+    - unfold str_take. rewrite Nat2Z.id. by apply elem_of_re_take.
+    - rewrite<-reverse_str_drop_reverse by lia. apply elem_of_re_rev.
+      unfold str_drop. rewrite bool_decide_true, Nat2Z.id by lia.
+      by apply elem_of_re_drop, elem_of_re_rev.
+    - unfold str_take. apply elem_of_re_take_until; [..|done].
+      all: apply str_index_of_nonneg; lia.
+  Qed.
+
+  Lemma rewrite_take_shl i k s :
+    (0 ≤ k ≤ i ∧ i ≤ length s)%Z →
+    str_take (i - k) s = reverse (str_drop k (reverse (str_take i s))).
+  Proof.
+    intros. rewrite reverse_str_drop_reverse by lia.
+    rewrite str_take_take. f_equal. rewrite length_str_take. lia.
+  Qed.
+
+  Lemma rewrite_take_shr i k s :
+    (0 ≤ k ∧ 0 ≤ i)%Z →
+    str_take (i + k) s = str_take i s ++ str_take k (str_drop i s).
+  Proof.
+    intros. by rewrite str_take_take_drop by lia.
+  Qed.
+
+  Definition re_drop_index (i : index) (r : regex) : regex :=
+    match i with
+    | i_nat k => re_drop k r
+    | i_rev k => re_rev (re_take k (re_rev r))
+    | i_fst c => re_drop_until c r
+    end.
+  
+  Lemma infer_drop_index s r i :
+    (0 ≤ ⟦ i ⟧ s)%Z →
+    s ∈ r →
+    str_drop (⟦ i ⟧ s) s ∈ re_drop_index i r.
+  Proof.
+    intros. destruct i; simpl in *.
+    - unfold str_drop. rewrite bool_decide_true, Nat2Z.id by lia.
+      by apply elem_of_re_drop.
+    - rewrite<-reverse_str_take_reverse by lia. apply elem_of_re_rev.
+      unfold str_take. rewrite Nat2Z.id. by apply elem_of_re_take, elem_of_re_rev.
+    - unfold str_drop. rewrite bool_decide_true by lia.
+      apply elem_of_re_drop_until; [..|done].
+      all: apply str_index_of_nonneg; lia.
+  Qed.
+
+  Lemma rewrite_drop_shl i k s :
+    (0 ≤ k ≤ i ∧ i ≤ length s)%Z →
+    str_drop (i - k) s = reverse (str_take k (reverse (str_take i s))) ++ (str_drop i s).
+  Proof.
+    intros. rewrite reverse_str_take_reverse; rewrite length_str_take; [|lia].
+    rewrite str_drop_take_drop by lia. f_equal. lia.
+  Qed.
+
+  Lemma rewrite_drop_shr i k s :
+    (0 ≤ k ∧ 0 ≤ i)%Z →
+    str_drop (i + k) s = str_drop k (str_drop i s).
+  Proof.
+    intros. rewrite str_drop_drop by lia. f_equal. lia.
+  Qed.
+
+  (** Substring *)
+
+  Inductive index_pos : index → Prop :=
+    | i_nat_pos k : index_pos (i_nat k)
+    | i_fst_pos c : index_pos (i_fst c)
+    .
+  
+  Lemma index_shift_prefix i n s :
+    index_pos i →
+    (0 ≤ ⟦ i ⟧ s < n)%Z →
+    ⟦ i ⟧ (str_take n s) = ⟦ i ⟧ s.
+  Proof.
+    inversion 1; subst; simpl; intros. { lia. }
+    rewrite str_index_of_take; lia.
+  Qed.
+
+  Lemma infer_substr_drop_take s r i j r1 r2 :
+    index_pos i →
+    (0 ≤ ⟦ i ⟧ s < ⟦ j ⟧ s)%Z →
+    s ∈ r →
+    re_take_index j r = r1 →
+    re_drop_index i r1 = r2 →
+    str_substr (⟦ i ⟧ s) (⟦ j ⟧ s) s ∈ r2.
+  Proof.
+    intros. subst. rewrite str_substr_alt.
+    rewrite <-(index_shift_prefix i (⟦ j ⟧ s)); [|done|lia].
+    apply infer_drop_index. { rewrite index_shift_prefix; [lia|done|lia]. }
+    apply infer_take_index; [lia|done].
+  Qed.
+
+  Inductive index_neg : index → Prop :=
+    | i_rev_neg k : index_neg (i_rev k)
+    | i_fst_neg c : index_neg (i_fst c)
+    .
+
+  Lemma index_shift_suffix i n s :
+    index_neg i →
+    (0 ≤ n < ⟦ i ⟧ s)%Z →
+    ⟦ i ⟧ (str_drop n s) = (⟦ i ⟧ s - n)%Z.
+  Proof.
+    inversion 1; subst; simpl; intros.
+    - rewrite length_str_drop, bool_decide_true by lia. lia. 
+    - rewrite str_index_of_drop; lia.
+  Qed.
+  
+  Lemma infer_substr_take_drop s r i j r1 r2 :
+    index_neg j →
+    (0 ≤ ⟦ i ⟧ s < ⟦ j ⟧ s)%Z →
+    s ∈ r →
+    re_drop_index i r = r1 →
+    re_take_index j r1 = r2 →
+    str_substr (⟦ i ⟧ s) (⟦ j ⟧ s) s ∈ r2.
+  Proof.
+    intros. subst. unfold str_substr.
+    rewrite <-(index_shift_suffix j (⟦ i ⟧ s)); [|done|lia].
+    apply infer_take_index.
+    { rewrite index_shift_suffix; [lia|done|lia]. }
+    apply infer_drop_index; [lia|done].
+  Qed.
+
+  Lemma rewrite_substr_l_shl i j k s :
+    (0 ≤ k ≤ i ∧ i ≤ j ≤ length s)%Z →
+    str_substr (i - k) j s = reverse (str_take k (reverse (str_take i s))) ++
+                             (str_substr i j s).
+  Proof.
+    intros. rewrite !str_substr_alt, rewrite_drop_shl.
+    2: { rewrite length_str_take. lia. }
+    do 4 f_equal. rewrite str_take_take. f_equal. lia.
+  Qed.
+
+  Lemma rewrite_substr_l_shr i j k s :
+    (0 ≤ k ∧ 0 ≤ i)%Z →
+    str_substr (i + k) j s = str_drop k (str_substr i j s).
+  Proof.
+    intros. by rewrite !str_substr_alt, rewrite_drop_shr by lia.
+  Qed.
+
+  Lemma rewrite_substr_r_shl i j k s :
+    (0 ≤ k ∧ 0 ≤ i ≤ j - k ∧ j ≤ length s)%Z →
+    str_substr i (j - k) s = reverse (str_drop k (reverse (str_substr i j s))).
+  Proof.
+    intros. unfold str_substr.
+    replace (j - k - i)%Z with ((j - i) - k)%Z by lia.
+    rewrite rewrite_take_shl; [done|].
+    rewrite length_str_drop, bool_decide_true by lia. lia.
+  Qed.
+
+  Lemma rewrite_substr_r_shr i j k s :
+    (0 ≤ k ∧ 0 ≤ i ≤ j)%Z →
+    str_substr i (j + k) s = (str_substr i j s) ++ (str_take k (str_drop j s)).
+  Proof.
+    intros. unfold str_substr.
+    replace (j + k - i)%Z with ((j - i) + k)%Z by lia.
+    rewrite rewrite_take_shr by lia.
+    do 2 f_equal. rewrite str_drop_drop by lia. f_equal. lia.
+  Qed.
+
+  (** Char at *)
+
+  Lemma rewrite_at i s :
+    str_at i s = str_take 1 (str_drop i s).
+  Proof.
+    unfold str_at. case_bool_decide.
+    - unfold str_take, str_drop. rewrite bool_decide_true by lia.
+      case_match eqn:Heq. 1: apply list_eq => k; destruct k; simpl.
+      * rewrite lookup_take, lookup_drop, <-Heq by lia. f_equal. lia.
+      * by rewrite lookup_nil, lookup_take_ge by lia.
+      * apply lookup_ge_None in Heq. by rewrite drop_ge by lia.
+    - unfold str_drop. by rewrite bool_decide_false by lia.
+  Qed.
+
+  Lemma rewrite_str_at_index_of c s :
+    let i := str_index_of c s in
+    (0 ≤ i)%Z →
+    str_at i s = [c].
+  Proof.
+    intros i ?. unfold str_at. rewrite bool_decide_true by lia.
+    assert (i = Z.to_nat i) as Hi by lia. by apply str_index_of_nonneg in Hi as [-> _].
+  Qed.
+
+  (** String Index-Of *)
+
+End infer_slice.

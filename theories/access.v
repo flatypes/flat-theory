@@ -6,7 +6,7 @@ Fixpoint cut_head_tail (r : regex) : list (charset * regex) :=
   | re_none | re_null => []
   | re_lit C => [(C, re_null)]
   | re_concat r1 r2 =>
-    ((λ '(C, r), (C, r ++ᵣ r2)) <$> cut_head_tail r1) ++
+    ((λ '(C, r), (C, r ⧺ r2)) <$> cut_head_tail r1) ++
     (if nullable r1 then cut_head_tail r2 else [])
   | re_union r1 r2 =>
     cut_head_tail r1 ++ cut_head_tail r2
@@ -30,7 +30,7 @@ Proof.
       simpl. replace (nullable r1) with true by (symmetry; by rewrite nullable_spec).
       rewrite elem_of_app. by right.
     + destruct IHs1 as [C [r' [? [??]]]]; [done|].
-      exists C, (r' ++ᵣ r2). repeat split; [|done|by constructor].
+      exists C, (r' ⧺ r2). repeat split; [|done|by constructor].
       simpl. rewrite elem_of_app, elem_of_list_fmap. left. by exists (C, r').
   - destruct IHs1 as [C [r' [? [??]]]]; [done|].
     exists C, r'. repeat split; [|done..].
@@ -42,7 +42,7 @@ Proof.
     + destruct IHs2 as [C [r' [? [??]]]]; [done|].
       exists C, r'. repeat split; done.
     + destruct IHs1 as [C [r' [? [??]]]]; [done|].
-      exists C, (r' ++ᵣ (re_star r)). repeat split; [|done|by constructor].
+      exists C, (r' ⧺ (re_star r)). repeat split; [|done|by constructor].
       simpl. rewrite elem_of_list_fmap. by exists (C, r').
 Qed.
 
@@ -51,7 +51,7 @@ Fixpoint cut_at_index (r : regex) (k : nat) : list (regex * charset * regex) :=
   | 0 => (λ '(C, r), (re_null, C, r)) <$> cut_head_tail r
   | S k' => 
     '(r1, C1, r) ← cut_at_index r k';
-    (λ '(C2, r2), (r1 ++ᵣ re_lit C1, C2, r2)) <$> cut_head_tail r
+    (λ '(C2, r2), (r1 ⧺ re_lit C1, C2, r2)) <$> cut_head_tail r
   end.
 
 Lemma cut_at_index_spec s r k c :
@@ -85,7 +85,7 @@ Proof.
 Qed.
 
 Definition refine_char_at (r : regex) (k : nat) (Cₜ : charset) : regex :=
-  big_union ((λ '(r1, C, r2), r1 ++ᵣ re_lit (C ∩ Cₜ) ++ᵣ r2) <$> (cut_at_index r k)).
+  big_union ((λ '(r1, C, r2), r1 ⧺ re_lit (C ∩ Cₜ) ⧺ r2) <$> (cut_at_index r k)).
 
 Lemma str_cut_middle (s : str) k c :
   s !! k = Some c →
@@ -121,7 +121,7 @@ Proof.
 Qed.
 
 Definition infer_drop (r : regex) (k : nat) : regex :=
-  big_union ((λ '(_, C, r2), re_lit C ++ᵣ r2) <$> (cut_at_index r k)).
+  big_union ((λ '(_, C, r2), re_lit C ⧺ r2) <$> (cut_at_index r k)).
 
 Lemma rule_infer_drop s r k :
   s ∈ r →

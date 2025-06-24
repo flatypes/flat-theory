@@ -36,8 +36,6 @@ Coercion Z.of_nat : nat >-> Z.
 
 Definition str : Type := list char.
 
-Definition ε : str := [].
-
 Definition infix : relation str := λ t s, ∃ s1 s2, s = s1 ++ t ++ s2.
 
 Infix "`infix_of`" := infix (at level 70).
@@ -49,21 +47,10 @@ Definition str_drop (i : Z) (s : str) : str :=
 
 Definition str_substr (i j : Z) (s : str) : str := str_take (j - i) (str_drop i s).
 
-(** Char at: the singleton string containing a character at the given position;
-    or empty string when position is out of range. *)
-Definition str_at (i : Z) (s : str) : str :=
-  if bool_decide (0 ≤ i)%Z then
-    match s !! (Z.to_nat i) with
-    | Some c => [c] 
-    | None => [] 
-    end
-  else [].
+Definition str_at (i : Z) (s : str) : str := str_take 1 (str_drop i s).
 
-Definition str_index_of (c : char) (s : str) : Z :=
-  match list_find (λ x, x = c) s with
-  | Some (i, _) => i
-  | None => -1
-  end.
+Definition str_index_of (t : str) (s : str) : Z.
+Admitted.
 
 Fixpoint str_alphabet (s : str) : charset :=
   match s with
@@ -72,6 +59,97 @@ Fixpoint str_alphabet (s : str) : charset :=
   end.
 
 Section string_properties.
+
+  Lemma unfold_str_drop i s :
+    (0 ≤ i)%Z →
+    str_drop i s = drop (Z.to_nat i) s.
+  Proof.
+    intros. unfold str_drop. by rewrite bool_decide_true by lia.
+  Qed.
+
+  Lemma str_drop_neg i s :
+    (i < 0)%Z →
+    str_drop i s = [].
+  Proof.
+    intros. unfold str_drop. by rewrite bool_decide_false by lia.
+  Qed.
+
+  Lemma str_substr_take_drop i j s :
+    (0 ≤ i)%Z →
+    str_substr i j s = take (Z.to_nat (j - i)) (drop (Z.to_nat i) s).
+  Proof.
+    intros. unfold str_substr, str_take. by rewrite unfold_str_drop by lia.
+  Qed.
+
+  Lemma str_substr_drop_take i j s :
+    (0 ≤ i ≤ j)%Z →
+    str_substr i j s = drop (Z.to_nat i) (take (Z.to_nat j) s).
+  Proof.
+    intros. rewrite str_substr_take_drop, take_drop_commute by lia. do 2 f_equal. lia.
+  Qed.
+
+  (* str_at *)
+
+  Lemma str_at_empty_iff i s :
+    str_at i s = [] ↔ (i < 0 ∨ length s ≤ i)%Z.
+  Admitted.
+
+  Corollary str_at_empty i s :
+    (i < 0 ∨ length s ≤ i)%Z → str_at i s = [].
+  Proof. apply str_at_empty_iff. Qed.
+
+  Lemma str_at_singleton_iff i s :
+    (∃ c, str_at i s = [c]) ↔ (0 ≤ i < length s)%Z.
+  Admitted.
+
+  Lemma str_at_singleton_lt_length i s c :
+    str_at i s = [c] → (0 ≤ i < length s)%Z.
+  Proof. intros. apply str_at_singleton_iff. by exists c. Qed.
+
+  Lemma str_at_lookup_None i s :
+    (0 ≤ i)%Z →
+    str_at i s = [] ↔ s !! (Z.to_nat i) = None.
+  Proof.
+  Admitted.
+
+  Lemma str_at_lookup_Some i s c :
+    (0 ≤ i)%Z →
+    str_at i s = [c] ↔ s !! (Z.to_nat i) = Some c.
+  Admitted.
+
+  (* str_index_of *)
+
+  Lemma str_index_of_neg t s :
+    (str_index_of t s < 0)%Z ↔ ¬ (t `infix_of` s).
+  Admitted.
+
+  Lemma str_index_of_nonneg t s :
+    (0 ≤ str_index_of t s)%Z ↔ t `infix_of` s.
+  Admitted.
+
+  Lemma str_index_of_eq i t s :
+    (0 ≤ i)%Z →
+    str_index_of t s = i ↔
+    t `prefix_of` str_drop i s ∧ (∀ j, (0 ≤ j < i)%Z → ¬ (t `prefix_of` str_drop j s)).
+  Admitted.
+
+  Lemma str_index_of_char_eq i c s :
+    (0 ≤ i)%Z →
+    str_index_of [c] s = i ↔
+    str_at i s = [c] ∧ c ∉ str_take i s.
+  Admitted.
+
+  (* Other properties *)
+  
+  Lemma str_at_singleton_inv i c c' :
+    str_at i [c] = [c'] → i = 0 ∧ c = c'.
+  Admitted.
+
+  Lemma str_at_concat_inv i s1 s2 c :
+    str_at i (s1 ++ s2) = [c] →
+    ((0 ≤ i < length s1)%Z ∧ str_at i s1 = [c]) ∨
+    ((length s1 < i < length s2)%Z ∧ str_at (i - length s1) s2 = [c]).
+  Admitted.
 
   Lemma infix_app_l t s1 s2 :
     t `infix_of` s1 → t `infix_of` s1 ++ s2.
@@ -85,6 +163,38 @@ Section string_properties.
     intros [tl [tr ->]]. exists (s1 ++ tl), tr. by simplify_list_eq.
   Qed.
 
+  Lemma str_take_nil i :
+    str_take i [] = [].
+  Proof.
+    unfold str_take. apply take_nil.
+  Qed.
+
+  Lemma str_drop_nil i :
+    str_drop i [] = [].
+  Proof.
+    unfold str_drop. case_bool_decide; [apply drop_nil | done].
+  Qed.
+
+  Lemma str_take_0 s :
+    str_take 0 s = [].
+  Proof.
+    unfold str_take. apply take_0.
+  Qed.
+
+  Lemma str_drop_0 s :
+    str_drop 0 s = s.
+  Proof.
+    unfold str_drop. rewrite bool_decide_true by lia. apply drop_0.
+  Qed.
+
+  Lemma str_take_neg i s :
+    (i < 0)%Z →
+    str_take i s = [].
+  Proof.
+    intros. unfold str_take. replace (Z.to_nat i) with 0%nat by lia. apply take_0.
+  Qed.
+
+
   Lemma length_str_take i s :
     length (str_take i s) = Z.to_nat (i `min` length s).
   Proof.
@@ -96,6 +206,47 @@ Section string_properties.
   Proof.
     unfold str_drop. case_bool_decide; [|done].
     rewrite length_drop. lia.
+  Qed.
+
+  Lemma str_take_app_l i s1 s2 :
+    (i ≤ length s1)%Z →
+    str_take i (s1 ++ s2) = str_take i s1.
+  Proof.
+    intros. unfold str_take. rewrite take_app.
+    replace (Z.to_nat i - length s1) with 0 by lia.
+    by rewrite take_0, app_nil_r.
+  Qed.
+
+  Lemma str_take_app_r i s1 s2 :
+    (length s1 ≤ i)%Z →
+    str_take i (s1 ++ s2) = s1 ++ str_take (i - length s1) s2.
+  Proof.
+    intros. unfold str_take. rewrite take_app, take_ge by lia.
+    do 2 f_equal. lia.
+  Qed.
+
+  Lemma str_take_app i s1 s2 :
+    str_take i (s1 ++ s2) = str_take i s1 ++ str_take (i - length s1) s2.
+  Proof.
+    unfold str_take. rewrite take_app. do 2 f_equal. lia.
+  Qed.
+
+  Lemma str_drop_app_l i s1 s2 :
+    (0 ≤ i < length s1)%Z →
+    str_drop i (s1 ++ s2) = str_drop i s1 ++ s2.
+  Proof.
+    intros. unfold str_drop. rewrite bool_decide_true by lia.
+    rewrite drop_app. f_equal. replace (Z.to_nat i - length s1) with 0 by lia.
+    apply drop_0.
+  Qed.
+
+  Lemma str_drop_app_r i s1 s2 :
+    (length s1 ≤ i)%Z →
+    str_drop i (s1 ++ s2) = str_drop (i - length s1) s2.
+  Proof.
+    intros. unfold str_drop. repeat case_bool_decide; try lia.
+    rewrite drop_app. rewrite drop_ge by lia. rewrite app_nil_l.
+    f_equal. lia.
   Qed.
 
   Lemma lookup_str_take (i : nat) k s :
@@ -208,40 +359,19 @@ Section string_properties.
     ¬ (0 ≤ i < j)%Z ↔ (i < 0 ∨ j ≤ i)%Z.
   Proof. lia. Qed.
 
-  Lemma str_index_of_neg_iff c s :
-    str_index_of c s = (-1)%Z ↔ c ∉ s.
-  Proof.
-    trans (list_find (λ x, x = c) s = None).
-    + unfold str_index_of. case_match; [|done].
-      case_match. split; [lia|congruence].
-    + rewrite list_find_None, Forall_forall. naive_solver.
-  Qed.
-
-  Lemma str_index_of_nonneg c s (i : nat) :
-    str_index_of c s = i ↔ s !! i = Some c ∧ c ∉ take i s.
-  Proof.
-    trans (list_find (λ x, x = c) s = Some (i, c)).
-    + unfold str_index_of. case_match eqn:Heq.
-      - case_match. apply list_find_Some in Heq. naive_solver.
-      - split; [lia|done].
-    + rewrite list_find_Some. apply and_iff_compat_l.
-      rewrite elem_of_take. naive_solver.
-  Qed.
-
-  Lemma str_index_of_nonneg_iff c s i :
-    (0 ≤ i)%Z →
-    str_index_of c s = i ↔ s !! (Z.to_nat i) = Some c ∧ c ∉ str_take i s.
-  Proof.
+  Lemma str_index_of_nil s :
+    str_index_of [] s = 0.
   Admitted.
 
-  Lemma str_index_of_nonneg' c s :
-    let i := str_index_of c s in
-    (0 ≤ i)%Z →
-    s !! (Z.to_nat i) = Some c ∧ c ∉ str_take i s.
-  Proof.
-    intros. assert (i = Z.of_nat (Z.to_nat i)) as Hi by lia.
-    by apply str_index_of_nonneg in Hi as [??].
-  Qed.
+  Lemma str_index_of_prefix t s :
+    let i := str_index_of t s in
+    (0 ≤ i)%Z → t `prefix_of` str_drop i s.
+  Proof. Admitted.
+
+  Lemma str_index_of_lt_not_prefix i t s :
+    (0 ≤ i < str_index_of t s)%Z →
+    ¬ (t `prefix_of` str_drop i s).
+  Proof. Admitted.
 
   Lemma not_elem_of_prefix {A} (l l' : list A) x :
     x ∉ l → 
@@ -259,27 +389,24 @@ Section string_properties.
     intros ? Hl' Hx. destruct Hl' as [? ->]. set_solver.
   Qed.
 
-  Lemma str_index_of_take c s i :
-    (0 ≤ str_index_of c s < i)%Z →
-    str_index_of c (str_take i s) = str_index_of c s.
+  Lemma str_index_of_take t s i :
+    (0 ≤ str_index_of t s ∧ str_index_of t s + length t ≤ i)%Z →
+    str_index_of t (str_take i s) = str_index_of t s.
   Proof.
-    intros. apply str_index_of_nonneg_iff; [lia|]. split.
-    * rewrite lookup_str_take by lia. apply str_index_of_nonneg'. lia.
-    * rewrite str_take_take, Z.min_l by lia. apply str_index_of_nonneg'. lia.
-  Qed.
+    intros. apply str_index_of_eq; [lia|]. split.
+    * admit.
+    * admit. 
+    (* * rewrite lookup_str_take by lia. apply str_index_of_nonneg'. lia. *)
+    (* * rewrite str_take_take, Z.min_l by lia. apply str_index_of_nonneg'. lia. *)
+  Admitted.
 
-  Lemma str_index_of_drop c s n :
-    (0 ≤ n ≤ str_index_of c s)%Z →
-    str_index_of c (str_drop n s) = (str_index_of c s - n)%Z.
+  Lemma str_index_of_drop t s i :
+    (0 ≤ i ≤ str_index_of t s)%Z →
+    str_index_of t (str_drop i s) = (str_index_of t s - i)%Z.
   Proof.
-    intros. apply str_index_of_nonneg_iff; [lia|]. split.
-    * rewrite lookup_str_drop by lia.
-      replace (Z.to_nat n + Z.to_nat (str_index_of c s - n)) 
-        with (Z.to_nat (str_index_of c s)) by lia.
-      apply str_index_of_nonneg'. lia.
-    * rewrite str_take_drop_commute, Zplus_minus by lia.
-      eapply not_elem_of_suffix; [|apply suffix_str_drop].
-      apply str_index_of_nonneg'. lia.
+    intros. apply str_index_of_eq; [lia|]. split.
+    * rewrite str_drop_drop, Z.sub_add by lia. apply str_index_of_eq; [lia|done].
+    * intros j ?. rewrite str_drop_drop by lia. apply str_index_of_lt_not_prefix. lia.
   Qed.
 
   Lemma elem_of_str_alphabet c s :

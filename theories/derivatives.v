@@ -6,7 +6,7 @@ Fixpoint first_set (r : regex) : charset :=
   | re_none => ∅
   | re_null => ∅
   | re_lit C => C
-  | re_concat r1 r2 => first_set r1 ∪ (if bool_decide (ε ∈ r1) then first_set r2 else ∅)
+  | re_concat r1 r2 => first_set r1 ∪ (if bool_decide ([] ∈ r1) then first_set r2 else ∅)
   | re_union r1 r2 => first_set r1 ∪ first_set r2
   | re_star r => first_set r
   end.
@@ -31,9 +31,9 @@ Fixpoint d_char (c : char) (r : regex) : regex :=
   | re_none => ∅
   | re_null => ∅
   | re_lit C => if bool_decide (c ∈ C) then re_null else ∅
-  | re_concat r1 r2 => (d_char c r1 ++ᵣ r2) ∪ (if bool_decide (ε ∈ r1) then d_char c r2 else ∅)
+  | re_concat r1 r2 => (d_char c r1 ⧺ r2) ∪ (if bool_decide ([] ∈ r1) then d_char c r2 else ∅)
   | re_union r1 r2 => d_char c r1 ∪ d_char c r2
-  | re_star r => d_char c r ++ᵣ re_star r
+  | re_star r => d_char c r ⧺ re_star r
   end.
 
 Lemma elem_of_d_char c s r :
@@ -56,9 +56,9 @@ Fixpoint d_all (r : regex) : regex :=
   | re_none => ∅
   | re_null => ∅
   | re_lit C => if bool_decide (C ≡ ∅) then ∅ else re_null
-  | re_concat r1 r2 => (d_all r1 ++ᵣ r2) ∪ (if bool_decide (ε ∈ r1) then d_all r2 else ∅)
+  | re_concat r1 r2 => (d_all r1 ⧺ r2) ∪ (if bool_decide ([] ∈ r1) then d_all r2 else ∅)
   | re_union r1 r2 => d_all r1 ∪ d_all r2
-  | re_star r => d_all r ++ᵣ re_star r
+  | re_star r => d_all r ⧺ re_star r
   end.
 
 Lemma elem_of_d_all c s r :

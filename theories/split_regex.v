@@ -9,10 +9,10 @@ Section split_regex.
     | re_null => []
     | re_lit C => if bool_decide (C ≡ ∅) then [] else [(C, re_null)]
     | re_concat r1 r2 =>
-      ((λ '(C, r'), (C, r' ++ᵣ r2)) <$> re_head_tail r1) ++
-      (if bool_decide (ε ∈ r1) then re_head_tail r2 else [])
+      ((λ '(C, r'), (C, r' ⧺ r2)) <$> re_head_tail r1) ++
+      (if bool_decide ([] ∈ r1) then re_head_tail r2 else [])
     | re_union r1 r2 => re_head_tail r1 ++ re_head_tail r2
-    | re_star r => (λ '(C, r'), (C, r' ++ᵣ re_star r)) <$> re_head_tail r
+    | re_star r => (λ '(C, r'), (C, r' ⧺ re_star r)) <$> re_head_tail r
     end.
 
   Lemma re_head_tail_nil r :
@@ -48,7 +48,7 @@ Section split_regex.
         exists C, r'. repeat split; [done..|].
         simpl. apply elem_of_app. right. by rewrite bool_decide_true.
       * edestruct IHr1 as [C [r' [? [??]]]]; eauto.
-        exists C, (r' ++ᵣ r2). repeat split; [done|by constructor|].
+        exists C, (r' ⧺ r2). repeat split; [done|by constructor|].
         simpl. apply elem_of_app. left. apply elem_of_list_fmap. naive_solver.
     - edestruct IHr1 as [C [r' [? [??]]]]; eauto.
       exists C, r'. repeat split; [done..|].
@@ -58,7 +58,7 @@ Section split_regex.
       simpl. apply elem_of_app. by right.
     - apply app_eq_cons in Heq as [[-> ->]|[? [-> ->]]]; [naive_solver|].
       edestruct IHr as [C [r' [? [??]]]]; eauto.
-      exists C, (r' ++ᵣ re_star r). repeat split; [done|by constructor|].
+      exists C, (r' ⧺ re_star r). repeat split; [done|by constructor|].
       simpl. apply elem_of_list_fmap. naive_solver.
   Qed.
 
@@ -68,7 +68,7 @@ Section split_regex.
     | S i' =>
       '(C, r') ← re_head_tail r;
       '(r1, r2) ← re_split_at i' r';
-      [(re_lit C ++ᵣ r1, r2)]
+      [(re_lit C ⧺ r1, r2)]
     end.
 
   Lemma re_split_at_nil i r :
@@ -94,7 +94,7 @@ Section split_regex.
         rewrite firstn_cons, skipn_cons.
         rewrite length_cons in Hi.
         edestruct IHi' as [r1 [r2 [? [??]]]]; [|done|]; [lia|].
-        exists (re_lit C ++ᵣ r1), r2.
+        exists (re_lit C ⧺ r1), r2.
         split. { by apply elem_of_concat_lit. }
         split. { done. }
         simpl. apply elem_of_list_bind. exists (C, r'). split; [|done].
@@ -153,15 +153,15 @@ Section split_regex.
     | re_concat r1 r2 =>
       let '(cuts1, r1') := re_split_by c r1 in
       let '(cuts2, r2') := re_split_by c r2 in
-      (((λ '(r1l, r1r), (r1l, r1r ++ᵣ r2)) <$> cuts1) ++
-      ((λ '(r2l, r2r), (r1' ++ᵣ r2l, r2r)) <$> cuts2), r1' ++ᵣ r2')
+      (((λ '(r1l, r1r), (r1l, r1r ⧺ r2)) <$> cuts1) ++
+      ((λ '(r2l, r2r), (r1' ⧺ r2l, r2r)) <$> cuts2), r1' ⧺ r2')
     | re_union r1 r2 =>
       let '(cuts1, r1') := re_split_by c r1 in
       let '(cuts2, r2') := re_split_by c r2 in
       (cuts1 ++ cuts2, r1' ∪ r2')
     | re_star r => 
       let '(cuts, r') := re_split_by c r in
-      ((λ '(rl, rr), (re_star r' ++ᵣ rl, rr ++ᵣ re_star r)) <$> cuts, re_star r')
+      ((λ '(rl, rr), (re_star r' ⧺ rl, rr ⧺ re_star r)) <$> cuts, re_star r')
     end.
 
   Lemma elem_of_re_split_by_snd c r s :
@@ -198,7 +198,7 @@ Section split_regex.
       * assert (i ≤ length s1)%nat. { by apply Nat.lt_le_incl, lookup_lt_is_Some. }
         rewrite take_app_le, drop_app_le in * by done.
         specialize (IHr1 _ Hi) as [r1l [r1r [? [??]]]]; [done..|].
-        exists r1l, (r1r ++ᵣ r2). split; [done|]. split; [by constructor|].
+        exists r1l, (r1r ⧺ r2). split; [done|]. split; [by constructor|].
         do 2 case_match. simpl in *. apply elem_of_app. left.
         apply elem_of_list_fmap. eexists. split; [|done]. naive_solver.
       * rewrite take_app_ge, drop_app_ge in * by done.
@@ -206,7 +206,7 @@ Section split_regex.
         specialize (IHr2 _ Hi) as [r2l [r2r [? [??]]]]; [done..|].
         eapply elem_of_re_split_by_snd in Hp1; [|done].
         destruct (re_split_by c r1) as [? r1']. simpl in *.
-        exists (r1' ++ᵣ r2l), r2r. split; [by constructor|]. split; [done|].
+        exists (r1' ⧺ r2l), r2r. split; [by constructor|]. split; [done|].
         case_match. simpl in *. apply elem_of_app. right.
         apply elem_of_list_fmap. eexists. split; [|done]. naive_solver.
     - specialize (IHr _ Hi) as [rl [rr [? [? ?]]]]; [done..|].
@@ -222,7 +222,7 @@ Section split_regex.
         rewrite take_app_le, drop_app_le in * by done.
         specialize (IHr1 _ Hi) as [r1l [r1r [? [??]]]]; [done|].
         destruct (re_split_by c r) as [? r1']. simpl in *.
-        exists (re_star r1' ++ᵣ r1l), (r1r ++ᵣ re_star r).
+        exists (re_star r1' ⧺ r1l), (r1r ⧺ re_star r).
         split. { rewrite <-app_nil_l at 1. constructor; [constructor | done]. }
         split. { by constructor. }
         apply elem_of_list_fmap. eexists. split; [|done]. naive_solver.
@@ -270,7 +270,7 @@ Section split_regex.
   Proof. apply elem_of_re_take_drop_until. Qed.
 
   Definition re_take_until_shr (c : char) (k : nat) (r : regex) : regex :=
-    re_take_until c r ++ᵣ re_take k (re_drop_until c r).
+    re_take_until c r ⧺ re_take k (re_drop_until c r).
 
   Definition re_take_until_shl (c : char) (k : nat) (r : regex) : regex :=
     re_drop_rev k (re_take_until c r).
@@ -279,7 +279,7 @@ Section split_regex.
     re_drop k (re_drop_until c r).
 
   Definition re_drop_until_shl (c : char) (k : nat) (r : regex) : regex :=
-    re_take_rev k (re_take_until c r) ++ᵣ re_drop_until c r.
+    re_take_rev k (re_take_until c r) ⧺ re_drop_until c r.
 
   Lemma elem_of_re_take_until_shr c k r s i :
     i + k < length s →

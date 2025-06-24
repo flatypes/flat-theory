@@ -13,37 +13,41 @@ Inductive regex : Type :=
   .
 Global Instance regex_empty : Empty regex := re_none.
 Global Instance regex_union : Union regex := re_union.
-Infix "++ᵣ" := re_concat (right associativity, at level 60).
+Infix "⧺" := re_concat (right associativity, at level 60).
 
 Fixpoint regex_from_str (s : str) : regex :=
   match s with
   | [] => re_null
-  | c :: cs => re_lit {[c]} ++ᵣ regex_from_str cs
+  | c :: cs => re_lit {[c]} ⧺ regex_from_str cs
   end.
 Global Instance regex_singleton : Singleton str regex := regex_from_str.
 
 Inductive elem_of_regex : ElemOf str regex :=
   | elem_of_null :
-    ε ∈ re_null
+    [] ∈ re_null
   | elem_of_lit C c :
     c ∈ C → [c] ∈ re_lit C
   | elem_of_concat r1 r2 s1 s2 :
-    s1 ∈ r1 → s2 ∈ r2 → s1 ++ s2 ∈ r1 ++ᵣ r2
+    s1 ∈ r1 → s2 ∈ r2 → s1 ++ s2 ∈ r1 ⧺ r2
   | elem_of_union_l r1 r2 s:
     s ∈ r1 → s ∈ r1 ∪ r2
   | elem_of_union_r r1 r2 s :
     s ∈ r2 → s ∈ r1 ∪ r2
   | elem_of_star_zero r :
-    ε ∈ re_star r
+    [] ∈ re_star r
   | elem_of_star_many r s1 s2 :
-    s1 ≠ ε → s1 ∈ r → s2 ∈ re_star r → s1 ++ s2 ∈ re_star r
+    s1 ≠ [] → s1 ∈ r → s2 ∈ re_star r → s1 ++ s2 ∈ re_star r
   .
 Global Existing Instance elem_of_regex.
+
+Lemma elem_of_re_lit_inv s C :
+  s ∈ re_lit C → ∃ c, s = [c] ∧ c ∈ C.
+Proof. inv 1. eauto. Qed.
 
 Fixpoint re_power (r : regex) (n : nat) : regex :=
   match n with
   | O => re_null
-  | S n' => r ++ᵣ re_power r n'
+  | S n' => r ⧺ re_power r n'
   end.
 
 Notation "r ^ n" := (re_power r n).
@@ -60,7 +64,7 @@ Fixpoint nullable (r : regex) : bool :=
 
 Fixpoint re_rev (r : regex) : regex :=
   match r with
-  | re_concat r1 r2 => re_rev r2 ++ᵣ re_rev r1
+  | re_concat r1 r2 => re_rev r2 ⧺ re_rev r1
   | re_union r1 r2 => re_rev r1 ∪ re_rev r2
   | re_star r => re_star (re_rev r)
   | _ => r
@@ -80,7 +84,7 @@ Section regex_lemmas.
   Lemma elem_of_concat_lit c C s r :
     c ∈ C →
     s ∈ r →
-    c :: s ∈ re_lit C ++ᵣ r.
+    c :: s ∈ re_lit C ⧺ r.
   Proof.
     rewrite <-str_app_cons. constructor; [by constructor | done].
   Qed.
@@ -156,13 +160,13 @@ Section regex_lemmas.
   Qed.
 
   Lemma nullable_spec r :
-    nullable r ↔ ε ∈ r.
+    nullable r ↔ [] ∈ r.
   Proof.
     split.
     + (* -> *)
       induction r; [done|constructor|done|simpl..|constructor].
       - rewrite andb_True.
-        intros [??]. replace ε with (ε ++ ε) by done. constructor; auto.
+        intros [??]. rewrite <-app_nil_l at 1. constructor; auto.
       - rewrite orb_True.
         intros [?|?]; [apply elem_of_union_l | apply elem_of_union_r]; auto.
     + (* <- *)
@@ -172,7 +176,7 @@ Section regex_lemmas.
       - rewrite orb_True. right. auto.
   Qed.
 
-  Global Instance regex_null_dec r : Decision (ε ∈ r).
+  Global Instance regex_null_dec r : Decision ([] ∈ r).
   Proof.
     destruct (nullable r) eqn:Heq.
     - apply Is_true_true in Heq. left. by apply nullable_spec.

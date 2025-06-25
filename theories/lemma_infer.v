@@ -1,105 +1,71 @@
 From stdpp Require Import list.
-From flat Require Import regexes lang_infer.
+From flat Require Import regexes ranges lang_infer.
 
-Section lemma_infer.
+Implicit Type (s : str) (r : regex).
 
-  Implicit Type (s : str) (r : regex).
+Section length.
 
-  (* Length *)
+  Local Open Scope range_scope.
 
-  Fixpoint re_length_min (r : regex) : nat :=
+  Fixpoint re_length (r : regex) : range :=
     match r with
-    | re_none => 0
-    | re_null => 0
-    | re_lit _ => 1
-    | re_concat r1 r2 => re_length_min r1 + re_length_min r2
-    | re_union r1 r2 => re_length_min r1 `min` re_length_min r2
-    | re_star _ => 0
+    | re_none => {[ 0 ]}
+    | re_null => {[ 0 ]}
+    | re_lit _ => {[ 1 ]}
+    | re_concat r1 r2 => re_length r1 + re_length r2
+    | re_union r1 r2 => re_length r1 ⊔ re_length r2
+    | re_star r => (fin 0, inf)
     end.
 
-  Lemma re_length_min_le s r :
+  Lemma elem_of_re_length s r :
     s ∈ r →
-    re_length_min r ≤ length s.
+    length s ∈ re_length r.
   Proof.
-    induction 1; simpl; try lia. rewrite length_app. lia.
+    induction 1.
+    - by cbv.
+    - by cbv.
+    - rewrite length_app. by apply elem_of_range_add.
+    - simpl. apply elem_of_range_join. by left.
+    - simpl. apply elem_of_range_join. by right.
+    - by cbv.
+    - split; simpl; lia.
   Qed.
 
-  Fixpoint re_length_max (r : regex) : option nat :=
-    match r with
-    | re_none => Some 0
-    | re_null => Some 0
-    | re_lit _ => Some 1
-    | re_concat r1 r2 => 
-      m1 ← re_length_max r1; m2 ← re_length_max r2; Some (m1 + m2)
-    | re_union r1 r2 =>
-      m1 ← re_length_max r1; m2 ← re_length_max r2; Some (m1 `max` m2)
-    | re_star r =>
-      m ← re_length_max r; if bool_decide (m = 0) then Some 0 else None
-    end.
+End length.
 
-  Lemma re_length_max_ge s r :
-    s ∈ r →
-    ∀ m, re_length_max r = Some m → length s ≤ m.
-  Proof.
-    induction 1; intros; simplify_option_eq; try lia.
-    - rewrite length_app. apply Nat.add_le_mono; auto.
-    - etrans; [|by apply Nat.le_max_l]. auto.
-    - etrans; [|by apply Nat.le_max_r]. auto.
-    - rewrite length_app. replace 0 with (0 + 0) by lia. apply Nat.add_le_mono; auto.
-  Qed.
+(* Index-Of *)
 
-  Lemma infer_length_lemma s r :
-    s ∈ r →
-    (re_length_min r ≤ length s) ∧ 
-    (match re_length_max r with Some m => length s ≤ m | None => True end).
-  Proof.
-    intros. split.
-    + by apply re_length_min_le.
-    + case_match; [|done]. by eapply re_length_max_ge.
-  Qed.
+Lemma infer_index_of_nonneg_lemma s r t i :
+  s ∈ r →
+  str_index_of t s = i →
+  (0 ≤ i)%Z →
+  Z.to_nat i ∈ re_length (re_take_until t r).
+Proof.
+  intros ?? Hi. assert (length (str_take i s) = Z.to_nat i) as <-.
+  { unfold str_take. rewrite length_take, min_l; [done|].
+    subst. apply str_index_of_nonneg_lt_length in Hi. lia. }
+  by apply elem_of_re_length, elem_of_re_take_until.
+Qed.
 
-  (* Index-Of *)
+(* Index of Char-At *)
 
-  Definition index_of_in_range (i : Z) (t s : str) (r : regex) : Prop :=
-    let r' := re_take_until t r in
-    (re_length_min r' ≤ Z.to_nat i) ∧ 
-    (match re_length_max r' with Some m => Z.to_nat i ≤ m | None => True end) ∧
-    (Z.to_nat i < length s).
+(* Lemma infer_index_of_char_at_lemma i s c r :
+  str_at i s = [c] →
+  s ∈ r →
+  Z.to_nat i ∈ re_length (re_take_until [c] r).
+Proof.
+  intros Hi ?. assert (length (str_take i s) = Z.to_nat i) as <-.
+  { unfold str_take. rewrite length_take, min_l; [done|].
+    apply str_at_singleton_lt_length in Hi. lia. }
+  apply elem_of_re_length. apply elem_of_re_take_until. admit.
+Admitted. *)
 
-  Lemma infer_index_of_nonneg_lemma s r t i :
-    s ∈ r →
-    str_index_of t s = i →
-    (0 ≤ i)%Z →
-    index_of_in_range i t s r.
-  Proof.
-    intros. unfold index_of_in_range. intros.
-    assert (str_take i s ∈ re_take_until t r). { apply elem_of_re_take_until; [done..|lia]. }
-    assert (Z.to_nat i < length s). admit.
-    repeat split; [..|done].
-    + trans (length (str_take i s)); [by apply re_length_min_le|].
-      rewrite length_str_take. lia.
-    + case_match; [|done]. trans (length (str_take i s)); [|by eapply re_length_max_ge].
-      rewrite length_str_take. lia.
-  Admitted.
+(* Char-At *)
 
-  (* Index of Char-At *)
-
-  Lemma infer_index_of_char_at_lemma i s c r :
-    str_at i s = [c] →
-    s ∈ r →
-    index_of_in_range i [c] s r.
-  Proof.
-    intros.
-  Admitted.
-
-  (* Char-At *)
-
-  Lemma infer_char_at_lemma i s C :
-    str_at i s ∈ re_lit C →
-    Exists (λ c, str_at i s = [c]) (elements C).
-  Proof.
-    intros Hi. apply elem_of_re_lit_inv in Hi as [c [??]].
-    apply Exists_exists. exists c. split; [by apply elem_of_elements | done].
-  Qed.
-
-End lemma_infer.
+Lemma infer_char_at_lemma i s C :
+  str_at i s ∈ re_lit C →
+  Exists (λ c, str_at i s = [c]) (elements C).
+Proof.
+  intros Hi. apply elem_of_re_lit_inv in Hi as [c [??]].
+  apply Exists_exists. exists c. split; [by apply elem_of_elements | done].
+Qed.

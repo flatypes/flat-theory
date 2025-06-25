@@ -127,6 +127,10 @@ Section string_properties.
     (0 ≤ str_index_of t s)%Z ↔ t `infix_of` s.
   Admitted.
 
+  Lemma str_index_of_nonneg_lt_length t s :
+    (0 ≤ str_index_of t s)%Z → (str_index_of t s < length s)%Z.
+  Admitted.
+
   Lemma str_index_of_eq i t s :
     (0 ≤ i)%Z →
     str_index_of t s = i ↔

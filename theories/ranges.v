@@ -50,27 +50,6 @@ Notation "a ≤ b ≤ c" := (inf_nat_le a b ∧ inf_nat_le b c) : inf_nat_scope.
 Infix "`min`" := inf_nat_min (at level 35) : inf_nat_scope.
 Infix "`max`" := inf_nat_max (at level 35) : inf_nat_scope.
 
-Section inf_nat_properties.
-
-  Local Open Scope inf_nat_scope.
-
-  Set Printing Coercions.
-
-  (* Global Instance inf_nat_le_refl : Reflexive inf_nat_le. *)
-  (* Proof. *)
-    (* intros a. destruct a; simpl; [lia|done]. *)
-  (* Qed. *)
-
-  Lemma inf_nat_min_le a b x :
-    a `min` b ≤ x → (a ≤ x ∧ a ≤ b) ∨ (b ≤ x ∧ b ≤ a).
-  Admitted.
-
-  Lemma inf_nat_max_ge a b x :
-    x ≤ a `max` b → x ≤ a ∨ x ≤ b.
-  Admitted.
-
-End inf_nat_properties.
-
 Definition range : Type := (inf_nat * inf_nat).
 
 Local Open Scope inf_nat_scope.
@@ -116,12 +95,12 @@ Section range_lemmas.
     n ∈ Q ⊔ R.
   Proof.
     destruct Q as [a b]. destruct R as [c d].
-    intros [[??]|[??]]; destruct a, b, c, d, n; split; simpl in *; lia.
+    intros [[??]|[??]]; split; destruct a, b, c, d, n; simpl in *; lia.
   Qed.
 
   Definition range_is_singleton (R : range) : bool :=
     match R with
-    | (fin m, fin n) => m =? n
+    | (fin m, fin n) => bool_decide (m = n)
     | _ => false
     end.
 

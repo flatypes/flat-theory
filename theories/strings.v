@@ -16,29 +16,17 @@ Lemma charset_is_singleton_Some C c :
   charset_is_singleton C = Some c → C ≡ {[ c ]}.
 Admitted.
 
-Definition charset_delete (C : charset) (c : char) : charset :=
-  let l := listset_car C in
-  {| listset_car := filter (λ x, x ≠ c) l |}.
-
-Notation "C #- c" := (charset_delete C c) (at level 60).
-
-Lemma elem_of_charset_delete c C c' :
-  c ∈ C →
-  c ≠ c' →
-  c ∈ C #- c'.
-Proof.
-  intros. by apply elem_of_list_filter.
-Qed.
-
 (** * Strings *)
 
 Coercion Z.of_nat : nat >-> Z.
 
 Definition str : Type := list char.
 
-Definition infix : relation str := λ t s, ∃ s1 s2, s = s1 ++ t ++ s2.
+(* str concat: ++ *)
 
-Infix "`infix_of`" := infix (at level 70).
+(* str length: length *)
+
+(* str reverse: reverse *)
 
 Definition str_take (i : Z) (s : str) : str := take (Z.to_nat i) s.
 
@@ -49,14 +37,26 @@ Definition str_substr (i j : Z) (s : str) : str := str_take (j - i) (str_drop i 
 
 Definition str_at (i : Z) (s : str) : str := str_take 1 (str_drop i s).
 
-Definition str_index_of (t : str) (s : str) : Z.
-Admitted.
+Definition str_index_of (t s : str) : Z :=
+  match list_find (λ i, drop i s = t) (seq 0 (length s)) with
+  | Some (i, _) => i
+  | None => -1
+  end.
+
+Definition str_starts_with (t s : str) : bool := bool_decide (take (length t) s = t).
+
+Definition str_ends_with (t s : str) : bool := str_starts_with (reverse t) (reverse s).
+
+Definition str_contains (t s : str) : bool := bool_decide (0 ≤ str_index_of t s)%Z.
 
 Fixpoint str_alphabet (s : str) : charset :=
   match s with
   | [] => ∅
   | c :: s' => {[ c ]} ∪ str_alphabet s'
   end.
+
+Definition infix : relation str := λ t s, ∃ s1 s2, s = s1 ++ t ++ s2.
+Infix "`infix_of`" := infix (at level 70).
 
 Section string_properties.
 
@@ -72,6 +72,13 @@ Section string_properties.
     str_drop i s = [].
   Proof.
     intros. unfold str_drop. by rewrite bool_decide_false by lia.
+  Qed.
+
+  Lemma str_take_drop i s :
+    (0 ≤ i)%Z →
+    str_take i s ++ str_drop i s = s.
+  Proof.
+    intros. unfold str_take. rewrite unfold_str_drop by lia. apply take_drop.
   Qed.
 
   Lemma str_substr_take_drop i j s :
@@ -119,6 +126,11 @@ Section string_properties.
 
   (* str_index_of *)
 
+  Lemma str_index_of_range t s i :
+    str_index_of t s = i →
+    (-1 ≤ i < length s)%Z.
+  Admitted.
+
   Lemma str_index_of_neg t s :
     (str_index_of t s < 0)%Z ↔ ¬ (t `infix_of` s).
   Admitted.
@@ -127,9 +139,6 @@ Section string_properties.
     (0 ≤ str_index_of t s)%Z ↔ t `infix_of` s.
   Admitted.
 
-  Lemma str_index_of_nonneg_lt_length t s :
-    (0 ≤ str_index_of t s)%Z → (str_index_of t s < length s)%Z.
-  Admitted.
 
   Lemma str_index_of_eq i t s :
     (0 ≤ i)%Z →

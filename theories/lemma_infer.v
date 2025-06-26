@@ -41,9 +41,9 @@ Lemma infer_index_of_nonneg_lemma s r t i :
   (0 ≤ i)%Z →
   Z.to_nat i ∈ re_length (re_take_until t r).
 Proof.
-  intros ?? Hi. assert (length (str_take i s) = Z.to_nat i) as <-.
+  intros ? Hi ?. assert (length (str_take i s) = Z.to_nat i) as <-.
   { unfold str_take. rewrite length_take, min_l; [done|].
-    subst. apply str_index_of_nonneg_lt_length in Hi. lia. }
+    apply str_index_of_range in Hi. lia. }
   by apply elem_of_re_length, elem_of_re_take_until.
 Qed.
 

@@ -1,5 +1,5 @@
 From stdpp Require Import list sets.
-From flat Require Import regexes lemma_infer ranges lang_infer util.
+From flat Require Import regexes ranges inference util.
 
 (* Refine by char-at *)
 
@@ -129,9 +129,10 @@ Proof.
   - case_bool_decide; by constructor.
 Qed.
 
-Lemma refine_index_of s r t i R :
+
+(* Lemma refine_index_of s r t i R :
   s ∈ r →
-  str_index_of t s = i →
+  find s t = i →
   (0 ≤ i)%Z →
   Z.to_nat i ∈ R →
   s ∈ (re_length_in R (re_take_until t r)) ⧺ re_drop_until t r.
@@ -142,4 +143,4 @@ Proof.
     unfold str_take. rewrite length_take, min_l; [done|].
     apply str_index_of_range in Hi. lia.
   + by apply elem_of_re_drop_until.
-Qed.
+Qed. *)

@@ -207,3 +207,54 @@ Section regex_lemmas.
   Admitted.
 
 End regex_lemmas.
+
+(** Brzozowski derivative *)
+
+  Fixpoint d_char (c : char) (r : regex) : regex :=
+    match r with
+    | re_none => ∅
+    | re_null => ∅
+    | re_lit C => if bool_decide (c ∈ C) then re_null else ∅
+    | re_concat r1 r2 => (d_char c r1 ⧺ r2) ∪ (if bool_decide ([] ∈ r1) then d_char c r2 else ∅)
+    | re_union r1 r2 => d_char c r1 ∪ d_char c r2
+    | re_star r => d_char c r ⧺ re_star r
+    end.
+
+  Lemma elem_of_d_char s c r :
+    s ∈ d_char c r ↔ c :: s ∈ r.
+  Proof.
+    split.
+    + revert s. induction r => s; simpl; intros Hr.
+      - by apply not_elem_of_empty in Hr.
+      - by apply not_elem_of_empty in Hr.
+      - case_bool_decide; [|by apply not_elem_of_empty in Hr].
+        inv Hr. by constructor.
+      - apply elem_of_union in Hr as [Hr|Hr].
+        * inv Hr. rewrite app_comm_cons. constructor; [auto|done].
+        * case_bool_decide; [|by apply not_elem_of_empty in Hr].
+          rewrite <-(app_nil_l (c :: s)). constructor; [done|auto].
+      - apply elem_of_union. apply elem_of_union in Hr as [?|?]; auto.
+      - inv Hr. rewrite app_comm_cons. constructor; [done|auto|done].
+    + revert s. induction r => s.
+      all: inversion 1 as [|?|?????? Heq|?|?|?|?????? Heq]; subst.
+      - simpl. case_bool_decide; [constructor | congruence].
+      - apply app_eq_cons in Heq as [[-> ->]|[? [-> ->]]]; simpl; apply elem_of_union.
+        * right. rewrite bool_decide_true; eauto.
+        * left. constructor; eauto.
+      - simpl. apply elem_of_union. eauto.
+      - simpl. apply elem_of_union. eauto.
+      - apply app_eq_cons in Heq as [[-> ->]|[? [-> ->]]]; [done|].
+        simpl. constructor; eauto.
+  Qed.
+
+  Fixpoint d_str (t : str) (r : regex) : regex :=
+    match t with
+    | [] => r
+    | c :: t' => d_str t' (d_char c r)
+    end.
+
+  Lemma elem_of_d_str t s r :
+    s ∈ d_str t r ↔ t ++ s ∈ r.
+  Proof.
+    revert r. induction t => r; simpl. { done. } by rewrite <-elem_of_d_char.
+  Qed.

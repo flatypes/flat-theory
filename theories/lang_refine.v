@@ -20,7 +20,7 @@ Lemma elem_of_re_split_0 s r c :
   head s = Some c →
   ∃ C r', (C, r') ∈ re_split_0 r ∧ c ∈ C ∧ tail s ∈ r'.
 Proof.
-  induction 1 as [|C c'|r1 r2 s1 s2 ? IHr1 ? IHr2|
+  induction 1 as [|c' C|r1 r2 s1 s2 ? IHr1 ? IHr2|
     r1 r2 s1 s2 IHr|r1 r2 s1 s2 IHr|?|r s1 s2 ?? IHr1 ? IHr2]; intros; simplify_list_eq.
   - exists C, re_null. repeat split; [|done|constructor].
     rewrite bool_decide_false; set_solver.
@@ -63,7 +63,7 @@ Proof.
     exists (re_lit C ⧺ r1), C', r2. repeat split; [|done|..|done].
     + simpl. apply elem_of_list_bind. eexists. split; [|done].
       apply elem_of_list_bind. eexists. split; [|done]. set_solver.
-    + by apply elem_of_concat_lit.
+    + by apply elem_of_re_concat_lit.
 Qed.
 
 Definition re_split_refine (C : charset) (i : nat) (r : regex) : list regex :=
@@ -83,7 +83,7 @@ Proof.
   + unfold re_split_refine. apply elem_of_list_bind. eexists. split; [|done].
     case_match. simplify_eq. rewrite bool_decide_true; set_solver.
   + rewrite <-(take_drop i) at 1. constructor; [done|].
-    rewrite (drop_S _ c i) by done. apply elem_of_concat_lit; [set_solver | done].
+    rewrite (drop_S _ c i) by done. apply elem_of_re_concat_lit; [set_solver | done].
 Qed.
 
 (* Refine by length *)

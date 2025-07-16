@@ -8,18 +8,36 @@ Definition char : Type := nat.
 (** A character set is a finite set of characters. *)
 Definition charset : Type := listset char.
 
-Definition charset_is_singleton (C : charset) : option char :=
-  match listset_car C with
-  | [c] => Some c
-  | _ => None
-  end.
+Section charset_properties.
 
-Lemma charset_is_singleton_Some C c :
-  charset_is_singleton C = Some c → C ≡ {[ c ]}.
-Admitted.
+  Implicit Type (L : charset) (σ : char).
 
-Global Instance charset_equiv_singleton_dec (C : charset) σ : Decision (C ≡ {[σ]}).
-Admitted.
+  Lemma charset_nonempty_exists L :
+    L ≢ ∅ → ∃ σ, σ ∈ L.
+  Proof.
+    intros.
+    assert (listset_car L ≠ []) as Hne.
+    { intros HL. by apply listset_empty_alt in HL. }
+    apply head_is_Some in Hne as [σ Hσ]. exists σ.
+    by apply head_Some_elem_of in Hσ.
+  Qed.
+
+  Definition cs_singleton (L : charset) (σ : char) : bool := bool_decide (elements L = [σ]).
+
+  Lemma cs_singleton_spec L σ :
+    L ≡ {[σ]} ↔ cs_singleton L σ.
+  Proof.
+    (* setoid_rewrite bool_decide_spec.
+    rewrite list_singleton_iff. setoid_rewrite elem_of_elements.
+    set_solver. *)
+  Admitted.
+
+  Global Instance cs_singleton_dec L σ : Decision (L ≡ {[σ]}).
+  Proof.
+    refine (cast_if (decide (cs_singleton L σ))); by rewrite cs_singleton_spec.
+  Qed.
+
+End charset_properties.
 
 (** * Strings & String Operations *)
 
@@ -48,6 +66,7 @@ Definition substr (s : str) (i j : Z) : str := str_take (str_drop s i) (j - i).
 Notation "s [ i : j ]" := (substr s i j) (at level 2, i at level 50, j at level 50,
   left associativity, format "s [ i : j ]").
 
+(** Relationship between take and drop with substr. *)
 Lemma str_take_substr s n :
   str_take s n = s[0:n].
 Proof.
@@ -72,9 +91,6 @@ Notation "s [ n : ]" := (str_drop s n) (at level 2, n at level 50, left associat
 Definition char_at (s : str) (i : Z) : str := str_take (str_drop s i) 1.
 Notation "s [ i ]" := (char_at s i) (at level 2, i at level 50, no associativity, format "s [ i ]").
 
-Ltac unfold_substr :=
-  unfold substr, char_at, str_take, str_drop in *; repeat (rewrite bool_decide_true by lia).
-
 (** The prefix and suffix operations are defined by list relations 
     [`prefix_of`] and [`suffix_of`]. *)
 Definition str_prefix (t s : str) : bool := bool_decide (t `prefix_of` s).
@@ -84,7 +100,7 @@ Infix "⊒" := str_suffix (at level 70, no associativity).
 
 (** The find operation is defined by [list_find]. *)
 Definition find (s t : str) : Z :=
-  match list_find (λ k : nat, t ⊑ s[k:]) (seq 0 (length s)) with
+  match list_find (λ k : nat, t `prefix_of` s[k:]) (seq 0 (length s)) with
   | Some (k, _) => k
   | None => -1
   end.
@@ -93,11 +109,23 @@ Definition find (s t : str) : Z :=
 Definition str_infix (t s : str) : bool := bool_decide (0 ≤ find s t).
 Infix "`in`" := str_infix (at level 70, no associativity).
 
-(** Fixpoint str_alphabet (s : str) : charset :=
-  match s with
-  | [] => ∅
-  | c :: s' => {[ c ]} ∪ str_alphabet s'
-  end. **)
+(** Auto unfold *)
+
+Local Lemma unfold_str_drop s n :
+  0 ≤ n →
+  str_drop s n = drop (Z.to_nat n) s.
+Proof.
+  intros. unfold str_drop. by rewrite bool_decide_true by lia.
+Qed.
+
+Local Lemma Z_to_nat_1 :
+  Z.to_nat 1 = 1%nat.
+Proof. lia. Qed.
+
+Ltac unfold_substr :=
+  unfold substr, char_at, str_take in *;
+  rewrite ?unfold_str_drop in * by lia;
+  rewrite ?Nat2Z.id, ?Z_to_nat_1 in *.
 
 Section str_ops_properties.
 
@@ -107,7 +135,7 @@ Section str_ops_properties.
     i ≤ length s1 →
     (s1 ++ s2)[:i] = s1[:i].
   Proof.
-    intros. unfold str_take. rewrite take_app.
+    intros. unfold_substr. rewrite take_app.
     replace (Z.to_nat i - length s1)%nat with 0%nat by lia.
     by rewrite take_0, app_nil_r.
   Qed.
@@ -116,7 +144,7 @@ Section str_ops_properties.
     length s1 ≤ i →
     (s1 ++ s2)[:i] = s1 ++ s2[:i - length s1].
   Proof.
-    intros. unfold str_take. rewrite take_app, take_ge by lia.
+    intros. unfold_substr. rewrite take_app, take_ge by lia.
     do 2 f_equal. lia.
   Qed.
 
@@ -124,24 +152,22 @@ Section str_ops_properties.
     0 ≤ i < length s1 →
     (s1 ++ s2)[i:] = s1[i:] ++ s2.
   Proof.
-    intros. unfold str_drop. rewrite bool_decide_true by lia.
-    rewrite drop_app. f_equal. replace (Z.to_nat i - length s1)%nat with 0%nat by lia.
-    apply drop_0.
+    intros. unfold_substr. rewrite drop_app. f_equal.
+    replace (Z.to_nat i - length s1)%nat with 0%nat by lia. apply drop_0.
   Qed.
 
   Lemma str_drop_app_r i s1 s2 :
     length s1 ≤ i →
     (s1 ++ s2)[i:] = s2[i - length s1:].
   Proof.
-    intros. unfold str_drop. repeat case_bool_decide; try lia.
-    rewrite drop_app. rewrite drop_ge by lia. rewrite app_nil_l.
+    intros. unfold_substr. rewrite drop_app. rewrite drop_ge by lia. rewrite app_nil_l.
     f_equal. lia.
   Qed.
 
   Lemma substr_alt s i j :
     s[i:j] = s[:j][i:].
   Proof.
-    intros. unfold substr, str_take, str_drop. case_bool_decide; [|by rewrite take_nil].
+    intros. unfold_substr. unfold str_drop. case_bool_decide; [|by rewrite take_nil].
     rewrite take_drop_commute. destruct (Z.le_gt_cases i j) as [?|?].
     - do 2 f_equal. lia.
     - replace (Z.to_nat (j - i))%nat with 0%nat by lia. rewrite Nat.add_0_r.
@@ -149,426 +175,143 @@ Section str_ops_properties.
       symmetry. apply nil_length_inv. rewrite length_drop, length_take. lia.
   Qed.
 
-  Lemma char_at_lookup_Some s i σ :
-    s[i] = σ →
-    0 ≤ i ∧ s !! (Z.to_nat i) = Some σ.
+  (** Properties of the [char_at] operation *)
+
+  Lemma take_1_eq_singleton {A : Type} (l : list A) x :
+    take 1 l = [x] ↔ l !! 0%nat = Some x.
   Proof.
-    unfold char_at, str_take, str_drop. case_bool_decide; [|done].
-    intros Hi. split; [done|].
-    apply (f_equal (λ s, s !! 0%nat)) in Hi. simpl in Hi. rewrite <-Hi.
-    setoid_rewrite lookup_take; [|lia]. setoid_rewrite lookup_drop.
-    f_equal. lia.
+    split.
+    + intros Heq. apply (f_equal (λ l, l !! 0%nat)) in Heq.
+      by rewrite lookup_take in Heq by lia.
+    + intros. apply list_eq. destruct i. { by rewrite lookup_take by lia. }
+      simpl. rewrite lookup_nil. apply lookup_ge_None. rewrite length_take. lia.
   Qed.
-    
-  Lemma lookup_Some_char_at s i σ :
+
+  (** [s[i] = σ] iff [i] is a valid index of [s] and [σ] is the character at [i]. *)
+  Lemma char_at_iff i s σ :
+    s[i] = σ ↔ 0 ≤ i ∧ s !! (Z.to_nat i) = Some σ.
+  Proof.
+    unfold_substr. setoid_rewrite take_1_eq_singleton.
+    unfold str_drop. case_bool_decide.
+    - rewrite lookup_drop. split.
+      + intros <-. split; [|f_equal]; lia.
+      + intros [_ <-]. f_equal. lia.
+    - split; [done|naive_solver].
+  Qed.
+
+  Lemma lookup_Some_char_at i s σ :
     0 ≤ i →
     s !! (Z.to_nat i) = Some σ →
     s[i] = σ.
   Proof.
-    intros ? Hi. apply list_eq => k. unfold_substr. destruct k.
-    - simpl. rewrite <-Hi.
-      setoid_rewrite lookup_take; [|lia]. setoid_rewrite lookup_drop. f_equal. lia.
-    - simpl. rewrite lookup_nil. apply lookup_ge_None. rewrite length_take, length_drop. lia.
+    intros. by apply char_at_iff.
   Qed.
 
   Lemma char_at_inv_singleton c i σ :
     [c][i] = σ →
     i = 0 ∧ c = σ.
   Proof.
-    intros Hi. apply char_at_lookup_Some in Hi as [? Hi].
+    intros Hi. apply char_at_iff in Hi as [? Hi].
     apply list_lookup_singleton_Some in Hi as [??]. split; [lia|done].
   Qed.
 
   Lemma char_at_inv_app i s1 s2 σ :
     (s1 ++ s2)[i] = σ →
-    (0 ≤ i < length s1 ∧ s1[i] = σ) ∨
-    (length s1 < i < length s2 ∧ s2[i - length s1] = σ).
-  Admitted.
+    (0 ≤ i < length s1 ∧ s1[i] = σ) ∨ (length s1 ≤ i ∧ s2[i - length s1] = σ).
+  Proof.
+    intros Hi. apply char_at_iff in Hi as [? Hi].
+    apply lookup_app_Some in Hi as [Hi|[? Hi]].
+    - left. split. { apply lookup_lt_Some in Hi. lia. }
+      by apply char_at_iff.
+    - right. split. { lia. }
+      apply char_at_iff. split; [lia|]. rewrite <-Hi. f_equal. lia.
+  Qed.
 
-  (** [t ⊑ s] iff [t] is a prefix of [s]. *)
-  Lemma str_prefix_spec t s :
-    t ⊑ s ↔ t `prefix_of` s.
-  Proof. apply bool_decide_spec. Qed.
+  (** Properties of the [find] operation *)
 
-  (** [t ⊒ s] iff [t] is a suffix of [s]. *)
-  Lemma str_suffix_spec t s :
-    t ⊒ s ↔ t `suffix_of` s.
-  Proof. apply bool_decide_spec. Qed.
+  (** [find s t] returns either [-1] or an index of [s]. *)
+  Lemma find_range s t :
+    -1 ≤ find s t < length s.
+  Proof.
+    unfold find. case_match eqn:Heq; [|lia].
+    case_match. apply list_find_Some in Heq as [Hn _].
+    apply lookup_seq in Hn as [??]. lia.
+  Qed.
 
-  (** The pattern [t] occurs in [s] at index [i]. *)
-  Definition occur (t s : str) (i : Z) : Prop := t `prefix_of` s[i:].
+  (** [find s t] evaluates to an index [i] of [s] iff
+      [i] is the index of the _first_ occurrence of [t] in [s]. *)
+  Lemma found_iff i s t :
+    0 ≤ i < length s →
+    find s t = i ↔ t `prefix_of` s[i:] ∧ ∀ k, 0 ≤ k < i → ¬ (t `prefix_of` s[k:]).
+  Proof.
+    intros. unfold find. case_match eqn:Heq.
+    - case_match. apply list_find_Some in Heq as [Hn [Htn Hlt_n]].
+      apply lookup_seq in Hn as [??]. simplify_eq/=. split.
+      + intros <-. split; [done|].
+        intros k ?. specialize (Hlt_n (Z.to_nat k) (Z.to_nat k)). rewrite Z2Nat.id in Hlt_n by lia.
+        apply Hlt_n; [|lia]. apply lookup_seq. lia.
+      + intros [Hti Hlt_i]. destruct (Z.lt_total n i) as [?|[?|?]]; [|done|].
+        * apply Hlt_i in Htn; [done|lia].
+        * specialize (Hlt_n (Z.to_nat i) (Z.to_nat i)). rewrite Z2Nat.id in Hlt_n by lia.
+          apply Hlt_n in Hti; [done| |lia]. apply lookup_seq. lia.
+    - split; [lia|]. intros [Ht _].
+      rewrite list_find_None, Forall_forall in Heq.
+      specialize (Heq (Z.to_nat i)). rewrite Z2Nat.id in Heq by lia.
+      apply Heq in Ht; [done|]. apply elem_of_seq. lia.
+  Qed.
 
-  Lemma find_occur i s t :
+  Lemma found_occur i s t :
     0 ≤ i →
     find s t = i →
-    occur t s i.
-  Admitted.
+    t `prefix_of` s[i:].
+  Proof.
+    intros. pose (find_range s t). apply found_iff; [lia|done].
+  Qed.
 
-  Lemma find_first_occur i s t k :
+  Lemma found_not_occur i s t k :
     0 ≤ i →
     find s t = i →
-    0 ≤ k ≤ length s - length t →
-    occur t s k →
-    i ≤ k.
-  Admitted.
+    0 ≤ k < i →
+    ¬ (t `prefix_of` s[k:]).
+  Proof.
+    intros. pose (find_range s t). eapply found_iff; [|done|]; lia.
+  Qed.
+  
+  (** [find s t] is nonnegative iff [t] occurs in [s]. *)
+  Lemma find_nonneg_iff s t :
+    0 ≤ find s t ↔ (∃ i, 0 ≤ i < length s ∧ t `prefix_of` s[i:]).
+  Proof.
+    split.
+    + intros. exists (find s t). pose (find_range s t).
+      split; [lia | by apply found_occur].
+    + intros [i [? Ht]]. unfold find. case_match eqn:Heq.
+      - case_match; simplify_eq. apply list_find_Some in Heq as [Hn _].
+        apply lookup_seq in Hn. lia.
+      - rewrite list_find_None, Forall_forall in Heq.
+        specialize (Heq (Z.to_nat i)). rewrite Z2Nat.id in Heq by lia.
+        apply Heq in Ht; [done|]. apply elem_of_seq. lia.
+  Qed.
 
-  Lemma occur_find s t i :
+  Lemma found_char i s σ :
     0 ≤ i →
-    occur t s i ∧ (∀ k, 0 ≤ k ≤ length s - length t → occur t s k → i ≤ k) →
-    find s t = i.
-  Admitted.
-
-  Lemma find_nonneg i t s :
-    occur t s i →
-    0 ≤ find s t.
-  Admitted.
-
-  Lemma find_char_at s σ i :
     find s σ = i →
-    0 ≤ i →
     s[i] = σ ∧ σ ∉ s[:i].
-  Admitted.
-
-  Lemma find_le s t :
-    find s t ≤ length s - length t.
-  Admitted.
-
-  Lemma find_inv_empty s i :
-    find s ([]) = i →
-    s = [] ∨ i = 0.
-  Admitted.
-
-  (** [t `in` s] iff [t] is an infix of [s], i.e., [t] occurs in [s] at some index [i]. *)
-  Lemma str_infix_spec t s :
-    t `in` s ↔ ∃ k, 0 ≤ k ≤ length s - length t ∧ occur t s k.
   Proof.
-    unfold str_infix. rewrite bool_decide_spec.
-  Admitted.
-  
-  (*
-  Lemma unfold_str_drop i s :
-    (0 ≤ i)%Z →
-    str_drop i s = drop (Z.to_nat i) s.
-  Proof.
-    intros. unfold str_drop. by rewrite bool_decide_true by lia.
+    intros ? Hf. split.
+    + apply found_occur in Hf; [|lia]. destruct Hf as [? Hs].
+      unfold_substr. by rewrite Hs.
+    + intros Hin. unfold_substr. apply elem_of_take in Hin as [k [Hk ?]].
+      apply (found_not_occur _ _ _ k) in Hf; [|lia..]. apply Hf.
+      unfold_substr. apply drop_S in Hk. rewrite Hk. by eexists.
   Qed.
 
-  Lemma str_drop_neg i s :
-    (i < 0)%Z →
-    str_drop i s = [].
+  Lemma found_empty s :
+    find s ([]) = if bool_decide (s = []) then -1 else 0.
   Proof.
-    intros. unfold str_drop. by rewrite bool_decide_false by lia.
+    case_bool_decide; [by simplify_eq|]. apply found_iff; [|split].
+    + split; [done|]. destruct s; naive_solver.
+    + apply prefix_nil.
+    + lia.
   Qed.
-
-  Lemma str_take_drop i s :
-    (0 ≤ i)%Z →
-    str_take i s ++ str_drop i s = s.
-  Proof.
-    intros. unfold str_take. rewrite unfold_str_drop by lia. apply take_drop.
-  Qed.
-
-  Lemma str_substr_take_drop i j s :
-    (0 ≤ i)%Z →
-    str_substr i j s = take (Z.to_nat (j - i)) (drop (Z.to_nat i) s).
-  Proof.
-    intros. unfold str_substr, str_take. by rewrite unfold_str_drop by lia.
-  Qed.
-
-  Lemma str_substr_drop_take i j s :
-    (0 ≤ i ≤ j)%Z →
-    str_substr i j s = drop (Z.to_nat i) (take (Z.to_nat j) s).
-  Proof.
-    intros. rewrite str_substr_take_drop, take_drop_commute by lia. do 2 f_equal. lia.
-  Qed.
-
-  (* str_at *)
-
-  Lemma str_at_empty_iff i s :
-    str_at i s = [] ↔ (i < 0 ∨ length s ≤ i)%Z.
-  Admitted.
-
-  Corollary str_at_empty i s :
-    (i < 0 ∨ length s ≤ i)%Z → str_at i s = [].
-  Proof. apply str_at_empty_iff. Qed.
-
-  Lemma str_at_singleton_iff i s :
-    (∃ c, str_at i s = [c]) ↔ (0 ≤ i < length s)%Z.
-  Admitted.
-
-  Lemma str_at_singleton_lt_length i s c :
-    str_at i s = [c] → (0 ≤ i < length s)%Z.
-  Proof. intros. apply str_at_singleton_iff. by exists c. Qed.
-
-  Lemma str_at_lookup_None i s :
-    (0 ≤ i)%Z →
-    str_at i s = [] ↔ s !! (Z.to_nat i) = None.
-  Proof.
-  Admitted.
-
-  Lemma str_at_lookup_Some i s c :
-    (0 ≤ i)%Z →
-    str_at i s = [c] ↔ s !! (Z.to_nat i) = Some c.
-  Admitted.
-
-  (* str_index_of *)
-
-  Lemma str_index_of_range t s i :
-    str_index_of t s = i →
-    (-1 ≤ i < length s)%Z.
-  Admitted.
-
-  Lemma str_index_of_neg t s :
-    (str_index_of t s < 0)%Z ↔ ¬ (t `infix_of` s).
-  Admitted.
-
-  Lemma str_index_of_nonneg t s :
-    (0 ≤ str_index_of t s)%Z ↔ t `infix_of` s.
-  Admitted.
-
-
-  Lemma str_index_of_eq i t s :
-    (0 ≤ i)%Z →
-    str_index_of t s = i ↔
-    t `prefix_of` str_drop i s ∧ (∀ j, (0 ≤ j < i)%Z → ¬ (t `prefix_of` str_drop j s)).
-  Admitted.
-
-  Lemma str_index_of_char_eq i c s :
-    (0 ≤ i)%Z →
-    str_index_of [c] s = i ↔
-    str_at i s = [c] ∧ c ∉ str_take i s.
-  Admitted.
-
-  (* Other properties *)
-  
-  Lemma str_at_singleton_inv i c c' :
-    str_at i [c] = [c'] → i = 0 ∧ c = c'.
-  Admitted.
-
-  Lemma infix_app_l t s1 s2 :
-    t `infix_of` s1 → t `infix_of` s1 ++ s2.
-  Proof.
-    intros [tl [tr ->]]. exists tl, (tr ++ s2). by simplify_list_eq.
-  Qed.
-
-  Lemma infix_app_r t s1 s2 :
-    t `infix_of` s2 → t `infix_of` s1 ++ s2.
-  Proof.
-    intros [tl [tr ->]]. exists (s1 ++ tl), tr. by simplify_list_eq.
-  Qed.
-
-  Lemma str_take_nil i :
-    str_take i [] = [].
-  Proof.
-    unfold str_take. apply take_nil.
-  Qed.
-
-  Lemma str_drop_nil i :
-    str_drop i [] = [].
-  Proof.
-    unfold str_drop. case_bool_decide; [apply drop_nil | done].
-  Qed.
-
-  Lemma str_take_0 s :
-    str_take 0 s = [].
-  Proof.
-    unfold str_take. apply take_0.
-  Qed.
-
-  Lemma str_drop_0 s :
-    str_drop 0 s = s.
-  Proof.
-    unfold str_drop. rewrite bool_decide_true by lia. apply drop_0.
-  Qed.
-
-  Lemma str_take_neg i s :
-    (i < 0)%Z →
-    str_take i s = [].
-  Proof.
-    intros. unfold str_take. replace (Z.to_nat i) with 0%nat by lia. apply take_0.
-  Qed.
-
-
-  Lemma length_str_take i s :
-    length (str_take i s) = Z.to_nat (i `min` length s).
-  Proof.
-    unfold str_take. rewrite length_take. lia.
-  Qed.
-
-  Lemma length_str_drop i s :
-    length (str_drop i s) = if bool_decide (0 ≤ i)%Z then (Z.to_nat (length s - i)) else 0.
-  Proof.
-    unfold str_drop. case_bool_decide; [|done].
-    rewrite length_drop. lia.
-  Qed.
-
-  
-
-
-  Lemma lookup_str_take (i : nat) k s :
-    (i < k)%Z → (str_take k s) !! i = s !! i.
-  Proof.
-    intros. unfold str_take. setoid_rewrite lookup_take; [done|lia].
-  Qed.
-
-  Lemma lookup_str_drop (i : nat) k s :
-    (0 ≤ k)%Z → (str_drop k s) !! i = s !! (Z.to_nat k + i).
-  Proof.
-    intros. unfold str_drop. rewrite bool_decide_true by lia.
-    by setoid_rewrite lookup_drop.
-  Qed.
-
-  Lemma elem_of_str_take c k s :
-    (0 < k)%Z →
-    c ∈ str_take k s → ∃ i : nat, s !! i = Some c ∧ (i < k)%Z.
-  Proof.
-    unfold str_take. intros ? Hc. apply elem_of_take in Hc as [i [??]].
-    exists i. split; [done|lia].
-  Qed.
-
-  Lemma str_take_take i j s :
-    str_take i (str_take j s) = str_take (i `min` j) s.
-  Proof.
-    unfold str_take. rewrite take_take. f_equal. lia.
-  Qed.
-
-  Lemma str_drop_drop i j s :
-    (0 ≤ i ∧ 0 ≤ j)%Z →
-    str_drop i (str_drop j s) = str_drop (i + j) s.
-  Proof.
-    intros. unfold str_drop. rewrite !bool_decide_true by lia.
-    rewrite drop_drop. f_equal. lia.
-  Qed.
-
-  Lemma str_take_take_drop i j s :
-    (0 ≤ i ∧ 0 ≤ j)%Z →
-    str_take i s ++ str_take j (str_drop i s) = str_take (i + j) s.
-  Proof.
-    intros. unfold str_take, str_drop. rewrite bool_decide_true by lia.
-    rewrite take_take_drop. f_equal. lia.
-  Qed.
-
-  Lemma str_drop_take_drop i j s :
-    (0 ≤ i ≤ j)%Z →
-    str_drop i (str_take j s) ++ str_drop j s = str_drop i s.
-  Proof.
-    intros. unfold str_drop, str_take. rewrite !bool_decide_true by lia.
-    by rewrite drop_take_drop by lia.
-  Qed.
-
-  Lemma str_take_drop_commute i j s :
-    (0 ≤ i ∧ 0 ≤ j)%Z →
-    str_take j (str_drop i s) = str_drop i (str_take (i + j) s).
-  Proof.
-    intros. unfold str_take, str_drop. rewrite bool_decide_true by lia.
-    rewrite take_drop_commute. do 2 f_equal. lia.
-  Qed. 
-
-  Lemma reverse_str_drop_reverse s k :
-    (0 ≤ k)%Z →
-    reverse (str_drop k (reverse s)) = str_take (length s - k) s.
-  Proof.
-    intros. unfold str_drop, str_take. rewrite bool_decide_true by lia.
-    rewrite drop_reverse, reverse_involutive. f_equal. lia.
-  Qed.
-
-  Lemma reverse_str_take_reverse s k :
-    (0 ≤ k ≤ length s)%Z →
-    reverse (str_take k (reverse s)) = str_drop (length s - k) s.
-  Proof.
-    intros. unfold str_drop, str_take. rewrite bool_decide_true by lia.
-    rewrite take_reverse, reverse_involutive. f_equal. lia.
-  Qed.
-
-  Lemma prefix_str_take k s :
-    str_take k s `prefix_of` s.
-  Proof.
-    unfold str_take. apply prefix_take.
-  Qed.
-
-  Lemma suffix_str_drop k s :
-    str_drop k s `suffix_of` s.
-  Proof.
-    unfold str_drop. case_bool_decide; [apply suffix_drop | apply suffix_nil].
-  Qed.
-
-  Lemma str_substr_alt i j s :
-    str_substr i j s = str_drop i (str_take j s).
-  Proof.
-    intros. unfold str_substr, str_take, str_drop. case_bool_decide; [|by rewrite take_nil].
-    rewrite take_drop_commute. destruct (Z.le_gt_cases i j) as [?|?].
-    - by replace (Z.to_nat i + Z.to_nat (j - i)) with (Z.to_nat j) by lia.
-    - replace (Z.to_nat (j - i)) with 0 by lia. rewrite Nat.add_0_r.
-      rewrite skipn_firstn_comm, Nat.sub_diag, take_0.
-      symmetry. apply nil_length_inv. rewrite length_drop, length_take. lia.
-  Qed.
-
-  Lemma str_substr_nil i j s :
-    (i < 0 ∨ j ≤ i)%Z → str_substr i j s = [].
-  Proof.
-    intro. unfold str_substr, str_drop, str_take. case_bool_decide.
-    - assert (Z.to_nat (j - i) = 0) as -> by lia. apply take_0.
-    - apply take_nil.
-  Qed.
-
-  Fact str_substr_nil_cond_alt i j :
-    ¬ (0 ≤ i < j)%Z ↔ (i < 0 ∨ j ≤ i)%Z.
-  Proof. lia. Qed.
-
-  Lemma str_index_of_nil s :
-    str_index_of [] s = 0.
-  Admitted.
-
-  Lemma str_index_of_prefix t s :
-    let i := str_index_of t s in
-    (0 ≤ i)%Z → t `prefix_of` str_drop i s.
-  Proof. Admitted.
-
-  Lemma str_index_of_lt_not_prefix i t s :
-    (0 ≤ i < str_index_of t s)%Z →
-    ¬ (t `prefix_of` str_drop i s).
-  Proof. Admitted.
-
-  Lemma not_elem_of_prefix {A} (l l' : list A) x :
-    x ∉ l → 
-    l' `prefix_of` l →
-    x ∉ l'.
-  Proof.
-    intros ? Hl' Hx. destruct Hl' as [? ->]. set_solver.
-  Qed.
-
-  Lemma not_elem_of_suffix {A} (l l' : list A) x :
-    x ∉ l → 
-    l' `suffix_of` l →
-    x ∉ l'.
-  Proof.
-    intros ? Hl' Hx. destruct Hl' as [? ->]. set_solver.
-  Qed.
-
-  Lemma str_index_of_take t s i :
-    (0 ≤ str_index_of t s ∧ str_index_of t s + length t ≤ i)%Z →
-    str_index_of t (str_take i s) = str_index_of t s.
-  Proof.
-    intros. apply str_index_of_eq; [lia|]. split.
-    * admit.
-    * admit. 
-    (* * rewrite lookup_str_take by lia. apply str_index_of_nonneg'. lia. *)
-    (* * rewrite str_take_take, Z.min_l by lia. apply str_index_of_nonneg'. lia. *)
-  Admitted.
-
-  Lemma str_index_of_drop t s i :
-    (0 ≤ i ≤ str_index_of t s)%Z →
-    str_index_of t (str_drop i s) = (str_index_of t s - i)%Z.
-  Proof.
-    intros. apply str_index_of_eq; [lia|]. split.
-    * rewrite str_drop_drop, Z.sub_add by lia. apply str_index_of_eq; [lia|done].
-    * intros j ?. rewrite str_drop_drop by lia. apply str_index_of_lt_not_prefix. lia.
-  Qed.
-
-  Lemma elem_of_str_alphabet c s :
-    c ∈ str_alphabet s ↔ c ∈ s.
-  Proof.
-    induction s; set_solver.
-  Qed.
-  *)
 
 End str_ops_properties.

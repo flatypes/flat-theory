@@ -1,4 +1,4 @@
-From stdpp Require Import list well_founded.
+From stdpp Require Import list sets well_founded.
 From flat Require Export strings.
 
 (** * Regular expressions and languages. *)
@@ -15,52 +15,90 @@ Global Instance regex_empty : Empty regex := re_none.
 Global Instance regex_union : Union regex := re_union.
 Infix "⧺" := re_concat (right associativity, at level 60).
 
-Fixpoint regex_from_str (s : str) : regex :=
-  match s with
-  | [] => re_null
-  | c :: cs => re_lit {[c]} ⧺ regex_from_str cs
-  end.
-Global Instance regex_singleton : Singleton str regex := regex_from_str.
-
 Inductive elem_of_regex : ElemOf str regex :=
-  | elem_of_null :
+  | elem_of_re_null :
     [] ∈ re_null
-  | elem_of_lit C c :
-    c ∈ C → [c] ∈ re_lit C
-  | elem_of_concat r1 r2 s1 s2 :
+  | elem_of_re_lit σ L :
+    σ ∈ L → [σ] ∈ re_lit L
+  | elem_of_re_concat r1 r2 s1 s2 :
     s1 ∈ r1 → s2 ∈ r2 → s1 ++ s2 ∈ r1 ⧺ r2
-  | elem_of_union_l r1 r2 s:
+  | elem_of_re_union_l r1 r2 s:
     s ∈ r1 → s ∈ r1 ∪ r2
-  | elem_of_union_r r1 r2 s :
+  | elem_of_re_union_r r1 r2 s :
     s ∈ r2 → s ∈ r1 ∪ r2
-  | elem_of_star_zero r :
+  | elem_of_re_star_zero r :
     [] ∈ re_star r
-  | elem_of_star_many r s1 s2 :
+  | elem_of_re_star_many r s1 s2 :
     s1 ≠ [] → s1 ∈ r → s2 ∈ re_star r → s1 ++ s2 ∈ re_star r
   .
 Global Existing Instance elem_of_regex.
 
-Lemma elem_of_re_lit_inv s C :
-  s ∈ re_lit C → ∃ c, s = [c] ∧ c ∈ C.
-Proof. inv 1. eauto. Qed.
+Lemma elem_of_re_concat_lit σ L s r :
+  σ ∈ L →
+  s ∈ r →
+  σ :: s ∈ re_lit L ⧺ r.
+Proof.
+  intros.
+  replace (σ :: s) with ([σ] ++ s) by done.
+  constructor; [by constructor | done].
+Qed.
 
-Fixpoint re_power (r : regex) (n : nat) : regex :=
-  match n with
-  | O => re_null
-  | S n' => r ⧺ re_power r n'
+Fixpoint str_to_regex (s : str) : regex :=
+  match s with
+  | [] => re_null
+  | σ :: s' => re_lit {[σ]} ⧺ str_to_regex s'
   end.
+Global Instance regex_singleton : Singleton str regex := str_to_regex.
 
-Notation "r ^ n" := (re_power r n).
+Lemma elem_of_str_to_regex s1 s2 :
+  s1 ∈ str_to_regex s2 ↔ s1 = s2.
+Proof.
+  split.
+  + revert s1. induction s2 => s1; simpl. { by inv 1. }
+    inv 1 as [|?|???? Hc|?|?|?|?]. inv Hc. set_solver.
+  + intros ->. induction s2. { constructor. }
+    simpl. apply elem_of_re_concat_lit; [set_solver|done].
+Qed.
 
-Fixpoint nullable (r : regex) : bool :=
+Global Instance regex_semi_set : SemiSet str regex.
+Proof.
+  split.
+  + inv 1.
+  + intros. apply elem_of_str_to_regex.
+  + intros. split. { inv 1; auto. }
+    intros [?|?]; [by apply elem_of_re_union_l | by apply elem_of_re_union_r].
+Qed.
+
+Fixpoint re_nullable (r : regex) : bool :=
   match r with
   | re_none => false
   | re_null => true
   | re_lit _ => false
-  | re_concat r1 r2 => nullable r1 && nullable r2
-  | re_union r1 r2 => nullable r1 || nullable r2
+  | re_concat r1 r2 => re_nullable r1 && re_nullable r2
+  | re_union r1 r2 => re_nullable r1 || re_nullable r2
   | re_star _ => true
   end.
+
+Lemma re_nullable_spec r :
+  [] ∈ r ↔ re_nullable r.
+Proof.
+  induction r; simpl.
+  - split; [inv 1|done].
+  - split; [done|constructor].
+  - split; [inv 1|done].
+  - rewrite andb_True. split.
+    + inv 1. pose (app_eq_nil s1 s2). naive_solver.
+    + intros [??]. rewrite <-app_nil_l at 1. constructor; naive_solver.
+  - rewrite orb_True. split.
+    + inv 1; naive_solver.
+    + intros [?|?]; apply elem_of_union; naive_solver.
+  - split; [done|constructor].
+Qed.
+
+Global Instance regex_nullable_dec (r : regex) : Decision ([] ∈ r).
+Proof.
+  refine (cast_if (decide (re_nullable r))); by rewrite re_nullable_spec.
+Qed.
 
 Fixpoint re_rev (r : regex) : regex :=
   match r with
@@ -70,26 +108,105 @@ Fixpoint re_rev (r : regex) : regex :=
   | _ => r
   end.
 
-Section regex_lemmas.
+(** Brzozowski derivative *)
+Fixpoint d_char (c : char) (r : regex) : regex :=
+  match r with
+  | re_none => ∅
+  | re_null => ∅
+  | re_lit C => if bool_decide (c ∈ C) then re_null else ∅
+  | re_concat r1 r2 => (d_char c r1 ⧺ r2) ∪ (if bool_decide ([] ∈ r1) then d_char c r2 else ∅)
+  | re_union r1 r2 => d_char c r1 ∪ d_char c r2
+  | re_star r => d_char c r ⧺ re_star r
+  end.
 
-  Implicit Type c : char.
-  Implicit Type C : charset.
-  Implicit Type s : str.
-  Implicit Type r : regex.
+Fixpoint d_str (t : str) (r : regex) : regex :=
+  match t with
+  | [] => r
+  | c :: t' => d_str t' (d_char c r)
+  end.
 
-  Lemma str_app_cons c s :
-    [c] ++ s = c :: s.
-  Proof. naive_solver. Qed.
+(** Extensions *)
 
-  Lemma elem_of_concat_lit c C s r :
-    c ∈ C →
-    s ∈ r →
-    c :: s ∈ re_lit C ⧺ r.
+Fixpoint re_power (r : regex) (n : nat) : regex :=
+  match n with
+  | 0 => re_null
+  | S n' => r ⧺ re_power r n'
+  end.
+
+Infix "^" := re_power (no associativity).
+
+Section regex_ops_properties.
+
+  Implicit Type (s : str) (σ : char) (L : charset) (r : regex) (n : nat).
+  
+  Lemma empty_re_concat r1 r2 :
+    r1 ≡ ∅ ∨ r2 ≡ ∅ → r1 ⧺ r2 ≡ ∅.
   Proof.
-    rewrite <-str_app_cons. constructor; [by constructor | done].
+    intros [?|?]; rewrite elem_of_equiv_empty => s Hs; inv Hs; set_solver.
   Qed.
 
-  Lemma elem_of_re_power_app s1 s2 n1 n2 r :
+  Fixpoint re_empty (r : regex) : bool :=
+    match r with
+    | re_none => true
+    | re_null => false
+    | re_lit L => bool_decide (L ≡ ∅)
+    | re_concat r1 r2 => re_empty r1 || re_empty r2
+    | re_union r1 r2 => re_empty r1 && re_empty r2
+    | re_star _ => false
+    end.
+
+  Lemma re_empty_true r :
+    re_empty r = true → r ≡ ∅.
+  Proof.
+    induction r as [| | L | r1 IHr1 r2 IHr2 | r1 IHr1 r2 IHr2 | r];
+      simpl; try done; intros Hr.
+    - apply bool_decide_eq_true in Hr.
+      apply elem_of_equiv_empty => s Hs. inv Hs. set_solver.
+    - apply empty_re_concat. apply orb_true_iff in Hr as [?|?]; naive_solver.
+    - apply empty_union. apply andb_true_iff in Hr. naive_solver.
+  Qed.
+
+  Lemma re_empty_false r :
+    re_empty r = false → ∃ s, s ∈ r.
+  Proof.
+    induction r as [| | L | r1 IHr1 r2 IHr2 | r1 IHr1 r2 IHr2 | r];
+      simpl; try done; intros Hr.
+    - exists []. constructor.
+    - apply bool_decide_eq_false in Hr.
+      apply charset_nonempty_exists in Hr as [σ ?]. exists [σ]. by constructor.
+    - apply orb_false_iff in Hr as [??].
+      destruct IHr1 as [s1 ?]; [done|]. destruct IHr2 as [s2 ?]; [done|].
+      exists (s1 ++ s2). by constructor.
+    - setoid_rewrite elem_of_union.
+      apply andb_false_iff in Hr as [?|?]; naive_solver.
+    - exists []. constructor.
+  Qed.
+
+  Corollary re_empty_false_nonempty r :
+    re_empty r = false → r ≢ ∅.
+  Proof.
+    intros Hr. apply re_empty_false in Hr as [s ?]. by apply (non_empty_inhabited s).
+  Qed.
+
+  Global Instance regex_empty_dec r : Decision (r ≡ ∅).
+  Proof.
+    refine (cast_if (decide (re_empty r))).
+    - rewrite Is_true_true in *. by apply re_empty_true.
+    - rewrite Is_true_false in *. by apply re_empty_false_nonempty.
+  Qed.
+
+  Global Instance re_singleton_dec r σ : Decision (r ≡ {[ [σ] ]}).
+  Admitted.
+
+  Lemma re_power_1 r :
+    r ^ 1 ≡ r.
+  Proof.
+    split; simpl.
+    + inv 1. inv H4. by rewrite app_nil_r.
+    + intros. simpl. rewrite <-app_nil_r at 1. constructor; [done|constructor].
+  Qed.
+
+  Lemma elem_of_re_power_plus s1 s2 n1 n2 r :
     s1 ∈ r ^ n1 →
     s2 ∈ r ^ n2 →
     s1 ++ s2 ∈ r ^ (n1 + n2).
@@ -100,16 +217,16 @@ Section regex_lemmas.
     - rewrite <-app_assoc. constructor; auto.
   Qed.
 
-  Local Definition str_length_ind :=
+  Local Definition length_ind :=
     well_founded_induction (well_founded_ltof str length).
 
   Lemma elem_of_re_star_power s r :
     s ∈ re_star r ↔ ∃ n, s ∈ r ^ n.
   Proof.
     split.
-    + induction s as [s IHs] using str_length_ind. unfold ltof in IHs.
+    + induction s as [s IHs] using length_ind. unfold ltof in IHs.
       inversion 1 as [|?|?|?|?|?|? s1 s2]; subst.
-      - exists O. constructor.
+      - exists 0. constructor.
       - destruct (nil_or_length_pos s1) as [?|?]; [done|].
         edestruct (IHs s2) as [n ?]; [rewrite length_app; lia | done|].
         exists (S n). simpl. by constructor.
@@ -119,106 +236,22 @@ Section regex_lemmas.
       - destruct s1; [auto | constructor; eauto].
   Qed.
 
-  Lemma elem_of_re_star_app s1 s2 r :
-    s1 ∈ re_star r →
-    s2 ∈ re_star r →
-    s1 ++ s2 ∈ re_star r.
-  Proof.
-    rewrite !elem_of_re_star_power. intros [n1 ?] [n2 ?].
-    exists (n1 + n2). by apply elem_of_re_power_app.
-  Qed.
-
-  Lemma re_elem_of_singleton s1 s2 :
-    s1 ∈ regex_from_str s2 ↔ s1 = s2.
-  Proof.
-    split.
-    + revert s1. induction s2 as [|c s] => s1; simpl.
-      - by inversion 1.
-      - inversion 1 as [|?|???? Hc|?|?|?|?]; subst.
-        inversion Hc as [|? ? Hc'|?|?|?|?|?]; subst; clear Hc.
-        apply elem_of_singleton in Hc' as ->. naive_solver.
-    + intros ->. induction s2.
-      - constructor.
-      - simpl. rewrite <-str_app_cons. constructor; [|done].
-        constructor. by apply elem_of_singleton.
-  Qed.
-
-  Lemma regex_elem_of_union s r1 r2 :
-    s ∈ r1 ∪ r2 ↔ s ∈ r1 ∨ s ∈ r2.
-  Proof.
-    split.
-    + inversion 1; eauto.
-    + intros [?|?]; by constructor.
-  Qed. 
-
-  Global Instance regex_semi_set : SemiSet str regex.
-  Proof.
-    split.
-    + inversion 1.
-    + intros. apply re_elem_of_singleton.
-    + intros. apply regex_elem_of_union.
-  Qed.
-
-  Lemma nullable_spec r :
-    nullable r ↔ [] ∈ r.
-  Proof.
-    split.
-    + (* -> *)
-      induction r; [done|constructor|done|simpl..|constructor].
-      - rewrite andb_True.
-        intros [??]. rewrite <-app_nil_l at 1. constructor; auto.
-      - rewrite orb_True.
-        intros [?|?]; [apply elem_of_union_l | apply elem_of_union_r]; auto.
-    + (* <- *)
-      induction r; inversion 1 as [|?|?? s1 s2|?|?|?|?]; subst; simpl; [done|..|done|done].
-      - rewrite andb_True. pose (app_eq_nil s1 s2). naive_solver.
-      - rewrite orb_True. left. auto.
-      - rewrite orb_True. right. auto.
-  Qed.
-
-  Global Instance regex_null_dec r : Decision ([] ∈ r).
-  Proof.
-    destruct (nullable r) eqn:Heq.
-    - apply Is_true_true in Heq. left. by apply nullable_spec.
-    - apply Is_true_false in Heq. right => ?. by apply Heq, nullable_spec.
-  Qed.
-
   Lemma elem_of_re_rev s r :
     s ∈ r →
     reverse s ∈ re_rev r.
   Proof.
-    induction 1; simpl.
+    induction 1 as [| | | | | |r s1 s2 ?? IHr1 ? IHr2]; simpl.
     - setoid_rewrite reverse_nil. constructor.
     - rewrite reverse_singleton. by constructor.
     - rewrite reverse_app. by constructor.
     - apply elem_of_union. by left.
     - apply elem_of_union. by right.
     - setoid_rewrite reverse_nil. constructor.
-    - rewrite reverse_app. simpl in *.
-      apply elem_of_re_star_app; [done|].
-      rewrite <-app_nil_r at 1. constructor; [|done|constructor].
-      setoid_rewrite <-reverse_nil. naive_solver.
+    - rewrite reverse_app. apply elem_of_re_star_power.
+      simpl in IHr2. apply elem_of_re_star_power in IHr2 as [n ?].
+      exists (n + 1). apply elem_of_re_power_plus; [done|].
+      by rewrite re_power_1.
   Qed.
-
-  Global Instance re_empty_dec (r : regex) : Decision (r ≡ ∅).
-  Admitted.
-
-  Global Instance re_singleton_dec (r : regex) (c : char) : Decision (r ≡ {[ [c] ]}).
-  Admitted.
-
-End regex_lemmas.
-
-(** Brzozowski derivative *)
-
-  Fixpoint d_char (c : char) (r : regex) : regex :=
-    match r with
-    | re_none => ∅
-    | re_null => ∅
-    | re_lit C => if bool_decide (c ∈ C) then re_null else ∅
-    | re_concat r1 r2 => (d_char c r1 ⧺ r2) ∪ (if bool_decide ([] ∈ r1) then d_char c r2 else ∅)
-    | re_union r1 r2 => d_char c r1 ∪ d_char c r2
-    | re_star r => d_char c r ⧺ re_star r
-    end.
 
   Lemma elem_of_d_char s c r :
     s ∈ d_char c r ↔ c :: s ∈ r.
@@ -247,14 +280,10 @@ End regex_lemmas.
         simpl. constructor; eauto.
   Qed.
 
-  Fixpoint d_str (t : str) (r : regex) : regex :=
-    match t with
-    | [] => r
-    | c :: t' => d_str t' (d_char c r)
-    end.
-
   Lemma elem_of_d_str t s r :
     s ∈ d_str t r ↔ t ++ s ∈ r.
   Proof.
     revert r. induction t => r; simpl. { done. } by rewrite <-elem_of_d_char.
   Qed.
+
+End regex_ops_properties.

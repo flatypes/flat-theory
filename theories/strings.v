@@ -1,43 +1,5 @@
-From stdpp Require Import listset.
-
-(** * Characters & Character Sets *)
-
-(** A (Unicode) character is represented by its _code point_. *)
-Definition char : Type := nat.
-
-(** A character set is a finite set of characters. *)
-Definition charset : Type := listset char.
-
-Section charset_properties.
-
-  Implicit Type (L : charset) (σ : char).
-
-  Lemma charset_nonempty_exists L :
-    L ≢ ∅ → ∃ σ, σ ∈ L.
-  Proof.
-    intros.
-    assert (listset_car L ≠ []) as Hne.
-    { intros HL. by apply listset_empty_alt in HL. }
-    apply head_is_Some in Hne as [σ Hσ]. exists σ.
-    by apply head_Some_elem_of in Hσ.
-  Qed.
-
-  Definition cs_singleton (L : charset) (σ : char) : bool := bool_decide (elements L = [σ]).
-
-  Lemma cs_singleton_spec L σ :
-    L ≡ {[σ]} ↔ cs_singleton L σ.
-  Proof.
-    (* setoid_rewrite bool_decide_spec.
-    rewrite list_singleton_iff. setoid_rewrite elem_of_elements.
-    set_solver. *)
-  Admitted.
-
-  Global Instance cs_singleton_dec L σ : Decision (L ≡ {[σ]}).
-  Proof.
-    refine (cast_if (decide (cs_singleton L σ))); by rewrite cs_singleton_spec.
-  Qed.
-
-End charset_properties.
+From stdpp Require Import list list_numbers.
+From flat Require Export charsets.
 
 (** * Strings & String Operations *)
 

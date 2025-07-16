@@ -173,7 +173,7 @@ Section regex_ops_properties.
       simpl; try done; intros Hr.
     - exists []. constructor.
     - apply bool_decide_eq_false in Hr.
-      apply charset_nonempty_exists in Hr as [σ ?]. exists [σ]. by constructor.
+      apply non_empty_elem_of in Hr as [σ ?]. exists [σ]. by constructor.
     - apply orb_false_iff in Hr as [??].
       destruct IHr1 as [s1 ?]; [done|]. destruct IHr2 as [s2 ?]; [done|].
       exists (s1 ++ s2). by constructor.

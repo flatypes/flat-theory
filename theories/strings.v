@@ -15,8 +15,8 @@ Coercion char_to_str : char >-> str.
   - length: [length]
  *)
 
-Local Open Scope Z_scope.
 Coercion Z.of_nat : nat >-> Z.
+Local Open Scope Z_scope.
 
 (** Auxiliary definitions for string take and drop, by list [take] and [drop]. *)
 Definition str_take (s : str) (n : Z) : str := take (Z.to_nat n) s.
@@ -89,6 +89,14 @@ Ltac unfold_substr :=
   rewrite ?unfold_str_drop in * by lia;
   rewrite ?Nat2Z.id, ?Z_to_nat_1 in *.
 
+Lemma nat_sub_le n m :
+  (n ≤ m)%nat → (n - m = 0)%nat.
+Proof. lia. Qed.
+
+Lemma Z_to_nat_sub_le n m :
+  n ≤ m → Z.to_nat (n - m) = 0%nat.
+Proof. lia. Qed.
+
 Section str_ops_properties.
 
   Implicit Type (s t : str) (σ : char).
@@ -97,8 +105,7 @@ Section str_ops_properties.
     i ≤ length s1 →
     (s1 ++ s2)[:i] = s1[:i].
   Proof.
-    intros. unfold_substr. rewrite take_app.
-    replace (Z.to_nat i - length s1)%nat with 0%nat by lia.
+    intros. unfold_substr. rewrite take_app, nat_sub_le by lia.
     by rewrite take_0, app_nil_r.
   Qed.
 
@@ -114,15 +121,14 @@ Section str_ops_properties.
     0 ≤ i < length s1 →
     (s1 ++ s2)[i:] = s1[i:] ++ s2.
   Proof.
-    intros. unfold_substr. rewrite drop_app. f_equal.
-    replace (Z.to_nat i - length s1)%nat with 0%nat by lia. apply drop_0.
+    intros. unfold_substr. rewrite drop_app. f_equal. rewrite nat_sub_le by lia. apply drop_0.
   Qed.
 
   Lemma str_drop_app_r i s1 s2 :
     length s1 ≤ i →
     (s1 ++ s2)[i:] = s2[i - length s1:].
   Proof.
-    intros. unfold_substr. rewrite drop_app. rewrite drop_ge by lia. rewrite app_nil_l.
+    intros. unfold_substr. rewrite drop_app, drop_ge, app_nil_l by lia.
     f_equal. lia.
   Qed.
 
@@ -132,7 +138,7 @@ Section str_ops_properties.
     intros. unfold_substr. unfold str_drop. case_bool_decide; [|by rewrite take_nil].
     rewrite take_drop_commute. destruct (Z.le_gt_cases i j) as [?|?].
     - do 2 f_equal. lia.
-    - replace (Z.to_nat (j - i))%nat with 0%nat by lia. rewrite Nat.add_0_r.
+    - rewrite Z_to_nat_sub_le, Nat.add_0_r by lia.
       rewrite skipn_firstn_comm, Nat.sub_diag, take_0.
       symmetry. apply nil_length_inv. rewrite length_drop, length_take. lia.
   Qed.
@@ -185,19 +191,25 @@ Section str_ops_properties.
     apply lookup_app_Some in Hi as [Hi|[? Hi]].
     - left. split. { apply lookup_lt_Some in Hi. lia. }
       by apply char_at_iff.
-    - right. split. { lia. }
+    - right. split; [lia|].
       apply char_at_iff. split; [lia|]. rewrite <-Hi. f_equal. lia.
   Qed.
 
   (** Properties of the [find] operation *)
 
+  Local Ltac destruct_find k Heq :=
+    unfold find;
+    match goal with
+    | |- context [ match list_find ?f ?l with _ => _ end ] =>
+      destruct (list_find f l) as [[k ?]|] eqn:Heq
+    end.
+
   (** [find s t] returns either [-1] or an index of [s]. *)
   Lemma find_range s t :
     -1 ≤ find s t < length s.
   Proof.
-    unfold find. case_match eqn:Heq; [|lia].
-    case_match. apply list_find_Some in Heq as [Hn _].
-    apply lookup_seq in Hn as [??]. lia.
+    destruct_find k Heq; [|lia].
+    apply list_find_Some in Heq as [Hk _]. apply lookup_seq in Hk. lia.
   Qed.
 
   (** [find s t] evaluates to an index [i] of [s] iff
@@ -206,16 +218,16 @@ Section str_ops_properties.
     0 ≤ i < length s →
     find s t = i ↔ t `prefix_of` s[i:] ∧ ∀ k, 0 ≤ k < i → ¬ (t `prefix_of` s[k:]).
   Proof.
-    intros. unfold find. case_match eqn:Heq.
-    - case_match. apply list_find_Some in Heq as [Hn [Htn Hlt_n]].
-      apply lookup_seq in Hn as [??]. simplify_eq/=. split.
+    intros. destruct_find k Heq.
+    - apply list_find_Some in Heq as [Hk [Htk Hlt_k]].
+      apply lookup_seq in Hk as [??]. simplify_eq/=. split.
       + intros <-. split; [done|].
-        intros k ?. specialize (Hlt_n (Z.to_nat k) (Z.to_nat k)). rewrite Z2Nat.id in Hlt_n by lia.
-        apply Hlt_n; [|lia]. apply lookup_seq. lia.
-      + intros [Hti Hlt_i]. destruct (Z.lt_total n i) as [?|[?|?]]; [|done|].
-        * apply Hlt_i in Htn; [done|lia].
-        * specialize (Hlt_n (Z.to_nat i) (Z.to_nat i)). rewrite Z2Nat.id in Hlt_n by lia.
-          apply Hlt_n in Hti; [done| |lia]. apply lookup_seq. lia.
+        intros j ?. specialize (Hlt_k (Z.to_nat j) (Z.to_nat j)).
+        rewrite Z2Nat.id in Hlt_k by lia. apply Hlt_k; [|lia]. apply lookup_seq. lia.
+      + intros [Hti Hlt_i]. destruct (Z.lt_total k i) as [?|[?|?]]; [|done|].
+        * apply Hlt_i in Htk; [done|lia].
+        * specialize (Hlt_k (Z.to_nat i) (Z.to_nat i)). rewrite Z2Nat.id in Hlt_k by lia.
+          apply Hlt_k in Hti; [done| |lia]. apply lookup_seq. lia.
     - split; [lia|]. intros [Ht _].
       rewrite list_find_None, Forall_forall in Heq.
       specialize (Heq (Z.to_nat i)). rewrite Z2Nat.id in Heq by lia.
@@ -246,9 +258,8 @@ Section str_ops_properties.
     split.
     + intros. exists (find s t). pose (find_range s t).
       split; [lia | by apply found_occur].
-    + intros [i [? Ht]]. unfold find. case_match eqn:Heq.
-      - case_match; simplify_eq. apply list_find_Some in Heq as [Hn _].
-        apply lookup_seq in Hn. lia.
+    + intros [i [? Ht]]. destruct_find k Heq.
+      - apply list_find_Some in Heq as [Hk _]. apply lookup_seq in Hk. lia.
       - rewrite list_find_None, Forall_forall in Heq.
         specialize (Heq (Z.to_nat i)). rewrite Z2Nat.id in Heq by lia.
         apply Heq in Ht; [done|]. apply elem_of_seq. lia.

@@ -1,5 +1,5 @@
 From stdpp Require Import list sets.
-From flat Require Import regexes ranges.
+From flat Require Import regexes intervals.
 
 (** * Prefix, Suffix, and Infix *)
 
@@ -16,6 +16,8 @@ Section infer_test.
     apply elem_of_d_str in Hs. set_solver.
   Qed.
 
+  Local Open Scope Z_scope.
+
   Fixpoint re_take_1 (r : regex) : regex :=
     match r with
     | re_none => re_null
@@ -27,25 +29,22 @@ Section infer_test.
     | re_star r => re_take_1 r ∪ re_null
     end.
 
-  Local Open Scope Z_scope.
-
   (** Lemma 4.1 *)
   Lemma elem_of_re_take_1 s r :
     s ∈ r →
     str_take s 1 ∈ re_take_1 r.
   Proof.
-    unfold_substr. induction 1 as [|C|r1 r2 s1 s2 ? IHr1 ? IHr2|
-      r1 r2 s1 s2 IHr|r1 r2 s1 s2 IHr|?|r s1 s2 ?? IHr1 ? IHr2]; simpl.
+    unfold_substr. induction 1 as [|?|?? s1 s2|?|?|?|? s1 s2]; simpl.
     - constructor.
     - by constructor.
     - destruct s1.
-      * rewrite bool_decide_true by done. simpl. apply elem_of_union. by right.
-      * rewrite take_app, length_cons, take_0, app_nil_r. apply elem_of_union. by left.
-    - apply elem_of_union. by left.
-    - apply elem_of_union. by right.
+      * rewrite bool_decide_true by done. simpl. set_solver.
+      * rewrite take_app, length_cons, take_0, app_nil_r. set_solver.
+    - set_solver.
+    - set_solver.
     - apply elem_of_union. right. constructor.
-    - rewrite take_app. destruct s1; [done|]. rewrite length_cons, take_0, app_nil_r.
-      apply elem_of_union. by left.
+    - rewrite take_app. destruct s1; [done|].
+      rewrite length_cons, take_0, app_nil_r. set_solver.
   Qed.
 
   Fixpoint re_prefix_forall (t : str) (r : regex) : bool :=
@@ -85,12 +84,11 @@ Section infer_test.
     ∃ r1 r2, (r1, r2) ∈ re_split σ r ∧ s[:i] ∈ r1 ∧ s[i:] ∈ r2.
   Proof.
     intros Hs. revert i σ.
-    induction Hs as [|σ' L|r1 r2 s1 s2 ? IHr1 ? IHr2|
-      r1 r2 s1 s2 IHr|r1 r2 s1 s2 IHr|?|r s1 s2 ?? IHr1 ? IHr2] => i σ Hi.
+    induction Hs as [|σ'|r1 r2 ??? IHr1 ? IHr2|?|?|?|r ???? IHr1 ? IHr2] => i σ Hi.
     - by apply char_at_iff in Hi as [??].
     - apply char_at_inv_singleton in Hi as [-> ->].
       simpl. rewrite bool_decide_true by done.
-      unfold str_take, str_drop. rewrite bool_decide_true, take_0, drop_0 by lia.
+      unfold_substr. rewrite take_0, drop_0 by lia.
       exists re_null, (re_lit L). repeat split; [set_solver | constructor | by constructor].
     - apply char_at_inv_app in Hi as [[? Hi]|[? Hi]].
       * clear IHr2. apply IHr1 in Hi as [r1l [r1r [? [??]]]]. exists r1l, (r1r ⧺ r2).
@@ -206,15 +204,14 @@ Section infer_substr.
     s ∈ r →
     str_drop s 1 ∈ re_drop_1 r.
   Proof.
-    unfold_substr. induction 1 as [| |r1 r2 s1 s2 ? IHr1 ? IHr2|
-      r1 r2 s1 s2 IHr|r1 r2 s1 s2 IHr|?|r s1 s2 ?? IHr1 ? IHr2]; simpl.
+    unfold_substr. induction 1 as [|?|?? s1 s2|?|?|?|? s1 s2]; simpl.
     - constructor.
     - constructor.
     - destruct s1.
-      * rewrite bool_decide_true by done. simpl. apply elem_of_union. by right.
-      * simplify_list_eq. rewrite drop_0. apply elem_of_union. left. by constructor.
-    - apply elem_of_union. by left.
-    - apply elem_of_union. by right.
+      * rewrite bool_decide_true by done. simpl. set_solver.
+      * simpl. rewrite drop_0. apply elem_of_union. left. by constructor.
+    - set_solver.
+    - set_solver.
     - apply elem_of_union. right. constructor.
     - rewrite drop_app. destruct s1; [done|]. rewrite length_cons, drop_0.
       apply elem_of_union. left. by constructor.
@@ -226,6 +223,10 @@ Section infer_substr.
     | S n' => re_drop n' (re_drop_1 r)
     end.
 
+  Local Lemma S_plus_1_l n :
+    S n = 1 + n.
+  Proof. lia. Qed.
+
   (** Lemma 4.6 *)
   Lemma elem_of_re_drop s r (n : nat) :
     s ∈ r →
@@ -233,7 +234,7 @@ Section infer_substr.
   Proof.
     unfold_substr.
     revert s r. induction n as [|n IHn] => s r ?; simpl. { by rewrite drop_0. }
-    replace (S n) with (1 + n) by lia. rewrite <-drop_drop.
+    rewrite S_plus_1_l, <-drop_drop.
     apply IHn. by apply elem_of_re_drop_1.
   Qed.
 
@@ -250,7 +251,7 @@ Section infer_substr.
   Proof.
     unfold_substr.
     revert s r. induction n as [|n IHn] => s r ?; simpl. { rewrite take_0. constructor. }
-    replace (S n) with (1 + n) by lia. rewrite <-take_take_drop.
+    rewrite S_plus_1_l, <-take_take_drop.
     constructor. { by apply elem_of_re_take_1. }
     apply IHn. by apply elem_of_re_drop_1.
   Qed.
@@ -259,7 +260,7 @@ Section infer_substr.
     match r with
     | re_none => re_none
     | re_null => re_null
-    | re_lit C => re_lit (C ∖ {[σ]})
+    | re_lit L => re_lit (L ∖ {[σ]})
     | re_concat r1 r2 => re_exclude σ r1 ⧺ re_exclude σ r2
     | re_union r1 r2 => re_exclude σ r1 ∪ re_exclude σ r2
     | re_star r => re_star (re_exclude σ r)
@@ -277,6 +278,10 @@ Section infer_substr.
     '(r1, r2) ← re_split σ r;
     let r1' := re_exclude σ r1 in
     if bool_decide (r1' ≢ ∅) then [(r1', re_lit {[σ]} ⧺ re_drop_1 r2)] else [].
+
+  Local Lemma S_plus_1_r n :
+    S n = n + 1.
+  Proof. lia. Qed.
 
   Local Open Scope Z_scope.
 
@@ -298,7 +303,7 @@ Section infer_substr.
     + apply char_at_iff in Hi as [??].
       unfold_substr. rewrite (drop_S _ σ) by done.
       apply elem_of_re_concat_lit; [set_solver|].
-      replace (S (Z.to_nat i)) with ((Z.to_nat i) + 1)%nat by lia. rewrite <-drop_drop.
+      rewrite S_plus_1_r, <-drop_drop.
       by apply elem_of_re_drop_1.
   Qed.
 
@@ -398,7 +403,7 @@ Section infer_substr.
     | index_r k => length s - k
     | index_at (σ, t) => find s (σ :: t)
     end.
-  Notation "⟦ κ ⟧ s" := (index_con κ s) (at level 20, no associativity).
+  Notation "⟦ κ ⟧ s" := (index_con κ s) (at level 20, no associativity, format "⟦  κ  ⟧  s").
 
   Definition re_drop_index (κ : index) (r : regex) : regex :=
     match κ with
@@ -416,24 +421,28 @@ Section infer_substr.
     | index_at (σ, t) => re_split_str_prefix σ t r
     end.
 
+  Local Lemma Z_to_nat_minus (n m : nat) :
+    Z.to_nat (n - m) = (n - m)%nat.
+  Proof. lia. Qed.
+
   Lemma infer_drop_index_sound s r n κ :
     s ∈ r →
     0 ≤ n →
-    ⟦κ⟧ s = n →
+    ⟦ κ ⟧ s = n →
     str_drop s n ∈ re_drop_index κ r.
   Proof.
     intros ??. destruct κ as [k|k|t]; intros Hn; simpl; repeat case_match; simpl in *.
     - rewrite <-Hn. by apply elem_of_re_drop.
     - rewrite <-Hn, <-reverse_involutive at 1.
       apply elem_of_re_rev. unfold_substr. rewrite reverse_drop.
-      replace (length s - Z.to_nat (length s - k))%nat with k%nat by lia.
+      rewrite Z_to_nat_minus, Nat.sub_sub_distr, Nat.sub_diag, Nat.add_0_l by lia.
       rewrite <-Nat2Z.id at 1. by apply elem_of_re_take, elem_of_re_rev.
     - by apply elem_of_re_find_suffix.
     - apply found_occur in Hn; [|lia]. eapply elem_of_re_split_str_suffix; [done..|].
       unfold str_prefix. naive_solver.
   Qed.
 
-  Lemma fold_str_drop (n : nat) s :
+  Local Lemma fold_str_drop (n : nat) s :
     drop n s = str_drop s n.
   Proof. by unfold_substr. Qed.
 
@@ -446,8 +455,8 @@ Section infer_substr.
     intros Hs ?. destruct κ as [k|k|t]; intros Hn; simpl; repeat case_match; simpl in *.
     - rewrite <-Hn. by apply elem_of_re_take.
     - rewrite <-Hn, <-reverse_involutive at 1.
-      apply elem_of_re_rev. unfold str_take.
-      rewrite reverse_take. replace (length s - Z.to_nat (length s - k))%nat with k%nat by lia.
+      apply elem_of_re_rev. unfold_substr. rewrite reverse_take.
+      rewrite Z_to_nat_minus, Nat.sub_sub_distr, Nat.sub_diag, Nat.add_0_l by lia.
       rewrite fold_str_drop. by apply elem_of_re_drop, elem_of_re_rev.
     - by apply elem_of_re_find_prefix.
     - apply found_occur in Hn; [|lia]. eapply elem_of_re_split_str_prefix; [done..|].
@@ -472,8 +481,7 @@ Section infer_substr.
       + unfold_substr. rewrite length_drop. lia.
       + unfold_substr. rewrite drop_drop, fold_str_drop. apply found_occur; lia.
       + intros k ? Hp. apply (found_not_occur (find s t) s t (n + k)); [lia|done|lia|].
-        unfold_substr. rewrite drop_drop in Hp.
-        by replace (Z.to_nat (n + k))%nat with (Z.to_nat n + Z.to_nat k)%nat by lia.
+        unfold_substr. rewrite drop_drop in Hp. by rewrite Z2Nat.inj_add by lia.
   Qed.
 
   Lemma infer_substr_index_take_drop_sound s r (i j : nat) κi κj :
@@ -524,24 +532,26 @@ Section infer_substr.
   Qed.
 
   (** Lemma 4.11 *)
-  Lemma rewrite_substr_l_shl (i j k : nat) s :
-    k ≤ i ∧ i ≤ j ≤ length s →
+  Lemma rewrite_substr_l_shl i j k s :
+    0 ≤ k ≤ i ∧ i ≤ j ≤ length s →
     s[i - k : j] = (reverse (reverse s[:i])[:k]) ++ s[i:j].
   Proof.
     intros. rewrite !substr_alt. unfold_substr.
     rewrite take_reverse, reverse_involutive, length_take.
-    rewrite <-(drop_take_drop _ _ i) by lia. f_equal. f_equal; [lia|].
+    rewrite <-(drop_take_drop _ _ (Z.to_nat i)) by lia. f_equal. f_equal; [lia|].
     rewrite take_take. f_equal. lia.
   Qed.
 
-  Lemma rewrite_substr_l_shr (i j k : nat) s :
+  Lemma rewrite_substr_l_shr i j k s :
+    0 ≤ i ∧ 0 ≤ k →
     s[i + k : j] = s[i:j][k:].
   Proof.
     intros. rewrite !substr_alt. unfold_substr.
-    replace (Z.to_nat (i + k))%nat with (i + k)%nat by lia. by rewrite drop_drop.
+    rewrite drop_drop. f_equal. lia.
   Qed.
 
-  Lemma rewrite_substr_r_shl (i j k : nat) s :
+  Lemma rewrite_substr_r_shl i j k s :
+    0 ≤ i ∧ 0 ≤ k →
     i ≤ j - k ∧ j ≤ length s →
     s[i : j - k] = reverse (reverse s[i:j])[k:].
   Proof.
@@ -550,14 +560,12 @@ Section infer_substr.
     f_equal. lia.
   Qed.
 
-  Lemma rewrite_substr_r_shr (i j k : nat) s :
-    i ≤ j →
+  Lemma rewrite_substr_r_shr i j k s :
+    0 ≤ i ≤ j ∧ 0 ≤ k →
     s[i : j + k] = s[i:j] ++ s[j:][:k].
   Proof.
-    intros. unfold_substr.
-    replace (Z.to_nat (j + k - i))%nat with (j - i + k)%nat by lia.
-    rewrite <-take_take_drop. f_equal; f_equal; [lia|].
-    rewrite drop_drop. f_equal. lia.
+    intros. unfold_substr. rewrite Z.add_sub_swap, Z2Nat.inj_add, <-take_take_drop by lia.
+    do 2 f_equal. rewrite drop_drop. f_equal. lia.
   Qed.
 
 End infer_substr.
@@ -565,17 +573,15 @@ End infer_substr.
 Section infer_length.
 
   Implicit Type (s t : str) (σ : char) (r : regex).
-  
-  Local Open Scope range_scope.
 
-  Fixpoint re_length (r : regex) : range :=
+  Fixpoint re_length (r : regex) : interval :=
     match r with
-    | re_none => {[ 0 ]}
-    | re_null => {[ 0 ]}
-    | re_lit _ => {[ 1 ]}
-    | re_concat r1 r2 => re_length r1 + re_length r2
+    | re_none => {[0]}
+    | re_null => {[0]}
+    | re_lit _ => {[1]}
+    | re_concat r1 r2 => (re_length r1 + re_length r2)%interval
     | re_union r1 r2 => re_length r1 ⊔ re_length r2
-    | re_star r => (fin 0, inf)
+    | re_star r => 0 `to` ∞
     end.
 
   (** Lemma 4.12 *)
@@ -583,14 +589,10 @@ Section infer_length.
     s ∈ r →
     length s ∈ re_length r.
   Proof.
-    induction 1.
-    - by cbv.
-    - by cbv.
-    - rewrite length_app. by apply elem_of_range_add.
-    - simpl. apply elem_of_range_join. by left.
-    - simpl. apply elem_of_range_join. by right.
-    - by cbv.
-    - split; simpl; lia.
+    induction 1; try (cbv; lia).
+    - rewrite length_app. simpl. by apply elem_of_interval_plus.
+    - simpl. apply elem_of_interval_join. by left.
+    - simpl. apply elem_of_interval_join. by right.
   Qed.
 
   Definition infer_length_sound := elem_of_re_length.
@@ -603,7 +605,7 @@ Section infer_length.
   Proof.
     intros.
     assert (i = length s[:i]) as ->.
-    { unfold str_take. rewrite length_take. pose (find_range s t). lia. }
+    { unfold_substr. rewrite length_take. pose (find_range s t). lia. }
     apply elem_of_re_length, infer_take_index_sound; [done|lia|naive_solver].
   Qed.
 

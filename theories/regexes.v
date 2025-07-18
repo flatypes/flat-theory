@@ -1,7 +1,7 @@
 From stdpp Require Import list sets well_founded.
 From flat Require Export strings.
 
-(** * Regular expressions and languages. *)
+(** * Regular Languages *)
 
 Inductive regex : Type :=
   | re_none : regex
@@ -69,6 +69,20 @@ Proof.
     intros [?|?]; [by apply elem_of_re_union_l | by apply elem_of_re_union_r].
 Qed.
 
+(** ** Extensions *)
+
+Definition re_plus (r : regex) : regex := r ⧺ re_star r.
+Definition re_opt (r : regex) : regex := r ∪ re_null.
+
+Fixpoint re_pow (r : regex) (n : nat) : regex :=
+  match n with
+  | 0 => re_null
+  | S n' => r ⧺ re_pow r n'
+  end.
+Infix "^" := re_pow.
+
+(** ** Basic Operations *)
+
 Fixpoint re_nullable (r : regex) : bool :=
   match r with
   | re_none => false
@@ -125,22 +139,14 @@ Fixpoint d_str (t : str) (r : regex) : regex :=
   | c :: t' => d_str t' (d_char c r)
   end.
 
-(** Extensions *)
-
-Definition re_plus (r : regex) : regex := r ⧺ re_star r.
-Definition re_opt (r : regex) : regex := r ∪ re_null.
-
-Fixpoint re_pow (r : regex) (n : nat) : regex :=
-  match n with
-  | 0 => re_null
-  | S n' => r ⧺ re_pow r n'
-  end.
-Infix "^" := re_pow.
+(** * Properties *)
 
 Section regex_ops_properties.
 
   Implicit Type (s : str) (σ : char) (L : charset) (r : regex) (n : nat).
   
+  (** ** Emptiness *)
+
   Lemma empty_re_concat r1 r2 :
     r1 ≡ ∅ ∨ r2 ≡ ∅ → r1 ⧺ r2 ≡ ∅.
   Proof.
@@ -196,6 +202,8 @@ Section regex_ops_properties.
     refine (cast_if (decide (re_empty r))); by rewrite re_empty_spec.
   Qed.
 
+  (** ** Properties of [re_pow] *)
+
   Lemma re_pow_1 r :
     r ^ 1 ≡ r.
   Proof.
@@ -241,6 +249,8 @@ Section regex_ops_properties.
       destruct s1; [|constructor]; auto.
   Qed.
 
+  (** ** Property of [re_rev] *)
+
   Lemma elem_of_re_rev s r :
     s ∈ r →
     reverse s ∈ re_rev r.
@@ -256,6 +266,8 @@ Section regex_ops_properties.
       simpl in IHr2. apply elem_of_re_star_pow in IHr2 as [n ?].
       exists (n + 1). apply elem_of_re_pow_plus; [done|]. by rewrite re_pow_1.
   Qed.
+
+  (** ** Properties of [d_char] and [d_str] *)
 
   Lemma elem_of_d_char s c r :
     s ∈ d_char c r ↔ c :: s ∈ r.

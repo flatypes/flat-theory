@@ -1,16 +1,16 @@
 From stdpp Require Import list list_numbers.
 From flat Require Export charsets.
 
-(** * Strings & String Operations *)
-
-(** A string is a list of characters. *)
+(** A _string_ is a list of characters. *)
 Definition str : Type := list char.
 
 Definition char_to_str (σ : char) : str := [σ].
 Coercion char_to_str : char >-> str.
 
+(** * String Operations *)
+
 (** The following basic string operations are simply list operations:
-  - concat: [app] (notation [_ ++ _])
+  - concat: [app]
   - reverse: [reverse]
   - length: [length]
  *)
@@ -97,9 +97,13 @@ Lemma Z_to_nat_sub_le n m :
   n ≤ m → Z.to_nat (n - m) = 0%nat.
 Proof. lia. Qed.
 
+(** * Properties *)
+
 Section str_ops_properties.
 
   Implicit Type (s t : str) (σ : char).
+
+  (** ** Properties of [take] and [drop] *)
 
   Lemma str_take_app_l i s1 s2 :
     i ≤ length s1 →
@@ -143,7 +147,7 @@ Section str_ops_properties.
       symmetry. apply nil_length_inv. rewrite length_drop, length_take. lia.
   Qed.
 
-  (** Properties of the [char_at] operation *)
+  (** ** Properties of [char_at] *)
 
   Lemma take_1_eq_singleton {A : Type} (l : list A) x :
     take 1 l = [x] ↔ l !! 0%nat = Some x.
@@ -195,7 +199,7 @@ Section str_ops_properties.
       apply char_at_iff. split; [lia|]. rewrite <-Hi. f_equal. lia.
   Qed.
 
-  (** Properties of the [find] operation *)
+  (** ** Properties of [find] *)
 
   Local Ltac destruct_find k Heq :=
     unfold find;

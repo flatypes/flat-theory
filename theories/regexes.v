@@ -3,18 +3,24 @@ From flat Require Export strings.
 
 (** * Regular Languages *)
 
+(** Definition of _regular expressions_ (regexes): *)
 Inductive regex : Type :=
-  | re_none : regex
-  | re_null : regex
-  | re_lit : charset → regex
-  | re_concat : regex → regex → regex
-  | re_union : regex → regex → regex
-  | re_star : regex → regex
+  | re_none : regex                   (* ∅ *)
+  | re_null : regex                   (* ε *)
+  | re_lit : charset → regex          (* literal *)
+  | re_concat : regex → regex → regex (* concatenation: [r1 ⧺ r2] *)
+  | re_union : regex → regex → regex  (* union: [r1 ∪ r2] *)
+  | re_star : regex → regex           (* Kleene star *)
   .
+(** Here our literals are [charset]s: the members of [re_lit L] are singleton strings [[σ]]
+    for [σ ∈ L]. The char literal [σ] is thus encoded as [re_lit {[σ]}],
+    where [{[_]}] is the [singleton] notation in stdpp. *)
+
 Global Instance regex_empty : Empty regex := re_none.
 Global Instance regex_union : Union regex := re_union.
 Infix "⧺" := re_concat (right associativity, at level 60).
 
+(** The membership relation between a string and a regex: *)
 Inductive elem_of_regex : ElemOf str regex :=
   | elem_of_re_null :
     [] ∈ re_null
@@ -32,17 +38,18 @@ Inductive elem_of_regex : ElemOf str regex :=
     s1 ≠ [] → s1 ∈ r → s2 ∈ re_star r → s1 ++ s2 ∈ re_star r
   .
 Global Existing Instance elem_of_regex.
+(** The usual notion of "[s] is in the language of [r]" is represented by [s ∈ r]. *)
 
 Lemma elem_of_re_concat_lit σ L s r :
   σ ∈ L →
   s ∈ r →
   σ :: s ∈ re_lit L ⧺ r.
 Proof.
-  intros.
-  replace (σ :: s) with ([σ] ++ s) by done.
+  intros. replace (σ :: s) with ([σ] ++ s) by done.
   constructor; [by constructor | done].
 Qed.
 
+(** Converting a string [s] into a regex whose unique member is [s]: *)
 Fixpoint str_to_regex (s : str) : regex :=
   match s with
   | [] => re_null
@@ -71,9 +78,13 @@ Qed.
 
 (** ** Extensions *)
 
+(** Kleene plus: *)
 Definition re_plus (r : regex) : regex := r ⧺ re_star r.
+
+(** Optional: *)
 Definition re_opt (r : regex) : regex := r ∪ re_null.
 
+(** Exponential (repeating [r] exactly [n] times): *)
 Fixpoint re_pow (r : regex) (n : nat) : regex :=
   match n with
   | 0 => re_null
@@ -81,8 +92,11 @@ Fixpoint re_pow (r : regex) (n : nat) : regex :=
   end.
 Infix "^" := re_pow.
 
+(** Loops will be introduced in [narrowing.v]. *)
+
 (** ** Basic Operations *)
 
+(** Nullability test: check if [r] contains the empty string. *)
 Fixpoint re_nullable (r : regex) : bool :=
   match r with
   | re_none => false
@@ -114,6 +128,18 @@ Proof.
   refine (cast_if (decide (re_nullable r))); by rewrite re_nullable_spec.
 Qed.
 
+(** Emptiness: check if [r] is semantically equivalent to [∅]. *)
+Fixpoint re_empty (r : regex) : bool :=
+  match r with
+  | re_none => true
+  | re_null => false
+  | re_lit L => bool_decide (L ≡ ∅)
+  | re_concat r1 r2 => re_empty r1 || re_empty r2
+  | re_union r1 r2 => re_empty r1 && re_empty r2
+  | re_star _ => false
+  end.
+
+(** Regex reverse: *)
 Fixpoint re_rev (r : regex) : regex :=
   match r with
   | re_concat r1 r2 => re_rev r2 ⧺ re_rev r1
@@ -122,7 +148,7 @@ Fixpoint re_rev (r : regex) : regex :=
   | _ => r
   end.
 
-(** Brzozowski derivative *)
+(** Brzozowski derivative w.r.t. a character: *)
 Fixpoint d_char (c : char) (r : regex) : regex :=
   match r with
   | re_none => ∅
@@ -133,6 +159,7 @@ Fixpoint d_char (c : char) (r : regex) : regex :=
   | re_star r => d_char c r ⧺ re_star r
   end.
 
+(** Brzozowski derivative w.r.t. a string: *)
 Fixpoint d_str (t : str) (r : regex) : regex :=
   match t with
   | [] => r
@@ -152,16 +179,6 @@ Section regex_ops_properties.
   Proof.
     intros [?|?]; rewrite elem_of_equiv_empty => s Hs; inv Hs; set_solver.
   Qed.
-
-  Fixpoint re_empty (r : regex) : bool :=
-    match r with
-    | re_none => true
-    | re_null => false
-    | re_lit L => bool_decide (L ≡ ∅)
-    | re_concat r1 r2 => re_empty r1 || re_empty r2
-    | re_union r1 r2 => re_empty r1 && re_empty r2
-    | re_star _ => false
-    end.
 
   Lemma re_empty_true r :
     re_empty r = true → r ≡ ∅.
@@ -188,6 +205,7 @@ Section regex_ops_properties.
     - exists []. constructor.
   Qed.
 
+  (** Correctness of the decision procedure [re_empty]: *)
   Lemma re_empty_spec r :
     r ≡ ∅ ↔ re_empty r.
   Proof.
@@ -234,6 +252,8 @@ Section regex_ops_properties.
   Local Definition length_ind :=
     well_founded_induction (well_founded_ltof str length).
 
+  (** This lemma provides a view that the [re_star r] is regarded as repeating [r] 
+      an arbitrary number of times [n]: *)
   Lemma elem_of_re_star_pow s r :
     s ∈ re_star r ↔ ∃ n, s ∈ r ^ n.
   Proof.

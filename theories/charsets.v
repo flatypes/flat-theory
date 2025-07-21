@@ -1,5 +1,6 @@
 From stdpp Require Import listset.
 
+(** We need some more lemmas for finite sets. *)
 Section set_ext.
 
   Context {A C : Type} `{FinSet A C}.
@@ -43,8 +44,6 @@ Section set_ext.
   Qed.
 
 End set_ext.
-
-(** * Characters & Character Sets *)
 
 (** A (Unicode) character is represented by its _code point_. *)
 Definition char : Type := nat.

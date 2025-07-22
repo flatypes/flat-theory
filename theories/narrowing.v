@@ -1,23 +1,5 @@
 From stdpp Require Import list sets.
-From flat Require Import regexes inference intervals.
-
-Definition re_loop (I : interval) (r : regex) : regex :=
-  match I with
-  | m `to` fin n => r ^ m ⧺ ⋃ ((λ i, r ^ i) <$> seq 0 (n - m + 1))
-  | m `to` inf => r ^ m ⧺ re_star r
-  end.
-
-Lemma re_pow_subseteq_loop n I r :
-  n ∈ I →
-  r ^ n ⊆ re_loop I r.
-Proof.
-  intros Hn s Hs. destruct I as [a [b|]]; simpl.
-  all: cbv in Hn; replace n with (a + (n - a)) in Hs by lia.
-  all: apply elem_of_re_pow_plus_inv in Hs as [s1 [s2 [-> [??]]]]; constructor; [done|].
-  - apply elem_of_union_list. eexists. split; [|done]. apply elem_of_list_fmap.
-    eexists. split; [done|]. apply elem_of_seq. lia.
-  - apply elem_of_re_star_pow. eauto.
-Qed.
+From flat Require Import regexes inference.
 
 Section length_cmp.
 

@@ -1,5 +1,5 @@
 From stdpp Require Import list sets.
-From flat Require Import regexes intervals.
+From flat Require Import regexes.
 
 (** * Prefix, Suffix, and Infix *)
 
@@ -179,6 +179,8 @@ Section infer_test.
   Qed.
 
 End infer_test.
+
+(** * Substring *)
 
 Section infer_substr.
 
@@ -543,6 +545,8 @@ Section infer_substr.
   Qed.
 
 End infer_substr.
+
+(** * Length and Find *)
 
 Section infer_length.
 

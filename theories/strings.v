@@ -1,7 +1,7 @@
 From stdpp Require Import list list_numbers.
 From flat Require Export charsets.
 
-(** A _string_ is a list of characters. *)
+(** We represent strings as character lists. *)
 Definition str : Type := list char.
 
 Definition char_to_str (σ : char) : str := [σ].
@@ -27,12 +27,12 @@ Notation "s [ i ]" := (char_at s i)
 
 Implicit Type (s t : str) (i j k : nat) (σ : char).
 
-Lemma take_1_eq_singleton {A : Type} (l : list A) x :
-  take 1 l = [x] ↔ l !! 0 = Some x.
+Lemma take_1_eq_singleton s σ :
+  take 1 s = [σ] ↔ s !! 0 = Some σ.
 Proof.
   split.
-  + intros Heq. apply (f_equal (λ l, l !! 0)) in Heq. simpl in Heq.
-    by rewrite <-Heq, lookup_take by lia.
+  + intros Heq. apply (f_equal (λ s, s !! 0)) in Heq. simpl in Heq.
+    rewrite <-Heq. setoid_rewrite lookup_take; [done|lia].
   + intros. apply list_eq. destruct i. { by rewrite lookup_take by lia. }
     simpl. rewrite lookup_nil. apply lookup_ge_None. rewrite length_take. lia.
 Qed.
@@ -43,7 +43,7 @@ Lemma char_at_lookup s i σ :
   s[i] = σ ↔ s !! i = Some σ.
 Proof.
   unfold char_at. setoid_rewrite take_1_eq_singleton.
-  by rewrite lookup_drop, Nat.add_0_r.
+  setoid_rewrite lookup_drop. by rewrite Nat.add_0_r.
 Qed.
 (** Thus we see the definition of [s[i]] is _consistent_ with the usual semantics of char-at. *)
 

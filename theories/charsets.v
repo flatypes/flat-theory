@@ -44,10 +44,8 @@ Section set_ext.
 
 End set_ext.
 
-(** * Characters & Character Sets *)
-
-(** A (Unicode) character is represented by its _code point_. *)
+(** We represent characters by their code points (encoded as [nat]). *)
 Definition char : Type := nat.
 
-(** A character set is a finite set of characters. *)
+(** We encode a character set as a [listset], which is an instance of [FinSet]. *)
 Definition charset : Type := listset char.

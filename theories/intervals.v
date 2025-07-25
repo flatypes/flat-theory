@@ -1,5 +1,7 @@
 From stdpp Require Import numbers.
 
+(** * Natural Numbers with Infinity *)
+
 Inductive inf_nat : Type :=
   | fin : nat → inf_nat
   | inf : inf_nat
@@ -54,7 +56,6 @@ Definition inf_nat_minus (a b : inf_nat) : inf_nat :=
   end.
 Infix "-" := inf_nat_minus : inf_nat_scope.
 
-(** Floor div *)
 Definition inf_nat_div (a b : inf_nat) : inf_nat :=
   match a, b with
   | fin m, fin n => m / n
@@ -63,6 +64,10 @@ Definition inf_nat_div (a b : inf_nat) : inf_nat :=
   end.
 Infix "/" := inf_nat_div : inf_nat_scope.
 
+(** * Intervals *)
+
+(** An interval encodes a subset of [nat] where the elements are in between (both inclusive)
+    a lower and a upper bound that is potentially [∞]. *)
 Inductive interval : Type :=
   | mk_interval : nat → inf_nat → interval.
 Notation "a `to` b" := (mk_interval a b) (at level 35, no associativity).
@@ -109,7 +114,7 @@ Infix "/ₙ" := interval_div_nat (at level 40, left associativity) : interval_sc
 
 Section interval_ops_properties.
 
-  Implicit Type (m n : nat) (I J : interval).
+  Implicit Type (I J : interval) (m n : nat).
 
   Lemma elem_of_interval_singleton m n :
     m ∈ interval_singleton n → m = n.

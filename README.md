@@ -5,7 +5,7 @@
 [build-badge]: https://github.com/flatypes/flat-theory/actions/workflows/build.yml/badge.svg?branch=main
 [build-link]: https://github.com/flatypes/flat-theory/actions/workflows/build.yml
 
-This repository contains the [Rocq](https://rocq-prover.org) mechanization of the FLAT-Checker paper.
+This repository contains the [Rocq](https://rocq-prover.org) mechanization of the [FLAT-Checker paper](https://paulz.me/files/flat-checker-paper.pdf).
 It contains the definition of charsets, strings and their operations, regular expressions (regexes) and their operations,
 and soundness theorem for the type inference and narrowing rules.
 

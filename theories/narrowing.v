@@ -137,20 +137,20 @@ Section char_at_eq.
       + by apply elem_of_re_concat_lit.
   Qed.
 
-  Definition re_char_at_in (i : nat) (L : charset) (r : regex) : list regex :=
-    '(r1, L1, r2) ← re_split_at i r ;
-    let L' := L1 ∩ L in
-    if bool_decide (L' ≢ ∅) then [r1 ⧺ re_lit L' ⧺ r2] else [].
+  Definition re_char_at_in (i : nat) (C : charset) (r : regex) : list regex :=
+    '(r1, C1, r2) ← re_split_at i r ;
+    let C' := C1 ∩ C in
+    if bool_decide (C' ≢ ∅) then [r1 ⧺ re_lit C' ⧺ r2] else [].
 
-  Lemma elem_of_re_char_at_in s r i σ L :
+  Lemma elem_of_re_char_at_in s r i σ C :
     s ∈ r →
     s !! i = Some σ →
-    σ ∈ L →
-    s ∈ ⋃ (re_char_at_in i L r).
+    σ ∈ C →
+    s ∈ ⋃ (re_char_at_in i C r).
   Proof.
     intros Hs ??. apply elem_of_union_list.
-    eapply elem_of_re_split_at in Hs as [r1 [L1 [r2 [? [? [??]]]]]]; [|done].
-    exists (r1 ⧺ re_lit (L1 ∩ L) ⧺ r2). split.
+    eapply elem_of_re_split_at in Hs as [r1 [C1 [r2 [? [? [??]]]]]]; [|done].
+    exists (r1 ⧺ re_lit (C1 ∩ C) ⧺ r2). split.
     + unfold re_char_at_in. apply elem_of_list_bind. eexists. split; [|done].
       case_match. simplify_eq. rewrite bool_decide_true; set_solver.
     + rewrite <-(take_drop i) at 1. constructor; [done|].

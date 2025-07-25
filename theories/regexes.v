@@ -4,7 +4,7 @@ From flat Require Export strings intervals.
 (** * Regular Languages *)
 
 (** We consider a kind of _extended_ regular expressions (regexes), where the literals
-    are charsets: the members of [re_lit L] are singleton strings [[σ]] for [σ ∈ L].
+    are charsets: the members of [re_lit C] are singleton strings [[σ]] for [σ ∈ C].
     The traditional character literal [σ] is here encoded as [re_lit {[σ]}],
     where the charset is a singleton containing [σ]. *)
 Inductive regex : Type :=
@@ -24,8 +24,8 @@ Infix "⧺" := re_concat (right associativity, at level 60).
 Inductive elem_of_regex : ElemOf str regex :=
   | elem_of_re_null :
     [] ∈ re_null
-  | elem_of_re_lit σ L :
-    σ ∈ L → [σ] ∈ re_lit L
+  | elem_of_re_lit σ C :
+    σ ∈ C → [σ] ∈ re_lit C
   | elem_of_re_concat r1 r2 s1 s2 :
     s1 ∈ r1 → s2 ∈ r2 → s1 ++ s2 ∈ r1 ⧺ r2
   | elem_of_re_union_l r1 r2 s:
@@ -43,10 +43,10 @@ Global Existing Instance elem_of_regex.
     i.e., their languages are equivalent, or, [∀ s, s ∈ r1 ↔ s ∈ r2]. *)
 (* Check equiv. *)
 
-Lemma elem_of_re_concat_lit σ L s r :
-  σ ∈ L →
+Lemma elem_of_re_concat_lit σ C s r :
+  σ ∈ C →
   s ∈ r →
-  σ :: s ∈ re_lit L ⧺ r.
+  σ :: s ∈ re_lit C ⧺ r.
 Proof.
   intros. replace (σ :: s) with ([σ] ++ s) by done.
   constructor; [by constructor | done].
@@ -143,7 +143,7 @@ Fixpoint re_empty (r : regex) : bool :=
   match r with
   | re_none => true
   | re_null => false
-  | re_lit L => bool_decide (L ≡ ∅)
+  | re_lit C => bool_decide (C ≡ ∅)
   | re_concat r1 r2 => re_empty r1 || re_empty r2
   | re_union r1 r2 => re_empty r1 && re_empty r2
   | re_star _ => false
@@ -163,7 +163,7 @@ Fixpoint d_char (σ : char) (r : regex) : regex :=
   match r with
   | re_none => ∅
   | re_null => ∅
-  | re_lit L => if bool_decide (σ ∈ L) then re_null else ∅
+  | re_lit C => if bool_decide (σ ∈ C) then re_null else ∅
   | re_concat r1 r2 => (d_char σ r1 ⧺ r2) ∪ (if bool_decide ([] ∈ r1) then d_char σ r2 else ∅)
   | re_union r1 r2 => d_char σ r1 ∪ d_char σ r2
   | re_star r => d_char σ r ⧺ re_star r
@@ -262,7 +262,7 @@ Section regex_ops_properties.
       using a hypothesis [H : r1 ≡ r2]. *)
   Global Instance re_concat_proper : Proper (equiv ==> equiv ==> equiv) re_concat.
   Proof.
-    intros r1 r2 ? r3 r4 ? s. split; inv 1; constructor; set_solver.
+    split; inv 1; constructor; set_solver.
   Qed.
 
   (** ** Properties of [re_pow] and [re_loop] *)
@@ -371,7 +371,7 @@ Section regex_ops_properties.
   Lemma elem_of_d_str t s r :
     s ∈ d_str t r ↔ t ++ s ∈ r.
   Proof.
-    revert r. induction t => r; simpl. { done. } by rewrite <-elem_of_d_char.
+    revert r. induction t => r; simpl; [done|]. by rewrite <-elem_of_d_char.
   Qed.
 
 End regex_ops_properties.

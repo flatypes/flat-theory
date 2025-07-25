@@ -82,11 +82,11 @@ Section infer_test.
     ∃ r1 r2, (r1, r2) ∈ re_split σ r ∧ s[:i] ∈ r1 ∧ s[i:] ∈ r2.
   Proof.
     intros Hs. revert i σ.
-    induction Hs as [|σ'|r1 r2 ??? IHr1 ? IHr2|?|?|?|r ???? IHr1 ? IHr2] => i σ Hi.
+    induction Hs as [|σ' C|r1 r2 ??? IHr1 ? IHr2|?|?|?|r ???? IHr1 ? IHr2] => i σ Hi.
     - by apply char_at_lookup in Hi.
     - apply char_at_lookup, list_lookup_singleton_Some in Hi as [-> ->].
       simpl. rewrite bool_decide_true by done.
-      exists re_null, (re_lit L). repeat split; [set_solver | constructor | by constructor].
+      exists re_null, (re_lit C). repeat split; [set_solver | constructor | by constructor].
     - apply char_at_inv_app in Hi as [[? Hi]|[? Hi]].
       * clear IHr2. apply IHr1 in Hi as [r1l [r1r [? [??]]]]. exists r1l, (r1r ⧺ r2).
         split. { simpl. rewrite elem_of_app. left. rewrite elem_of_list_fmap.
@@ -256,7 +256,7 @@ Section infer_substr.
     match r with
     | re_none => re_none
     | re_null => re_null
-    | re_lit L => re_lit (L ∖ {[σ]})
+    | re_lit C => re_lit (C ∖ {[σ]})
     | re_concat r1 r2 => re_exclude σ r1 ⧺ re_exclude σ r2
     | re_union r1 r2 => re_exclude σ r1 ∪ re_exclude σ r2
     | re_star r => re_star (re_exclude σ r)
